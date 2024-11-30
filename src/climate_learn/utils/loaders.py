@@ -319,7 +319,8 @@ def load_architecture(task, data_module, architecture):
                 backbone = ResNet(in_channels, out_channels, n_blocks=28)
             elif architecture == "unet":
                 backbone = Unet(
-                    in_channels, out_channels, ch_mults=[1, 1, 2], n_blocks=4
+                    in_channels, out_channels, ch_mults=[1, 1, 2], n_blocks=4,   hidden_channels=128,
+
                 )
             elif architecture == "vit":
                 backbone = VisionTransformer(
@@ -341,13 +342,13 @@ def load_architecture(task, data_module, architecture):
                 Interpolation((out_height, out_width), "bilinear"), backbone
             )
             optimizer = load_optimizer(
-                model, "adamw", {"lr": 1e-5, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
+                model, "adamw", {"lr": 4e-5, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
             )
             lr_scheduler = load_lr_scheduler(
                 "linear-warmup-cosine-annealing",
                 optimizer,
                 {
-                    "warmup_epochs": 5,
+                    "warmup_epochs": 1,
                     "max_epochs": 50,
                     "warmup_start_lr": 1e-8,
                     "eta_min": 1e-8,
