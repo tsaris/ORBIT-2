@@ -27,9 +27,13 @@ world_size = int(os.environ['SLURM_NTASKS'])
 world_rank = int(os.environ['SLURM_PROCID'])
 local_rank = int(os.environ['SLURM_LOCALID'])
 
+num_nodes = world_size//8
+
 torch.cuda.set_device(local_rank)
 device = torch.cuda.current_device()
 
+if world_rank==0:
+    print("world_size",world_size,"num_nodes",num_nodes,flush=True)
 
 
 parser = ArgumentParser()
@@ -47,17 +51,17 @@ args = parser.parse_args()
 
 # Set up data
 variables = [
-#    "land_sea_mask",
-#    "orography",
-#    "lattitude",
+    "land_sea_mask",
+    "orography",
+    "lattitude",
 #    "toa_incident_solar_radiation",
     "2m_temperature",
 #    "10m_u_component_of_wind",
 #    "10m_v_component_of_wind",
-#    "geopotential",
-#    "temperature",
+    "geopotential",
+    "temperature",
 #    "relative_humidity",
-#    "specific_humidity",
+    "specific_humidity",
 #    "u_component_of_wind",
 #    "v_component_of_wind",
 ]
@@ -93,7 +97,7 @@ model = cl.load_downscaling_module(data_module=dm, architecture=args.preset)
 pl.seed_everything(0)
 default_root_dir = f"{args.preset}_downscaling_{args.variable}"
 logger = TensorBoardLogger(save_dir=f"{default_root_dir}/logs")
-early_stopping = "val/mse:aggregate"
+early_stopping = "train/mse:aggregate"
 callbacks = [
 #    RichProgressBar(),
     RichModelSummary(max_depth=args.summary_depth),
@@ -110,7 +114,8 @@ trainer = pl.Trainer(
     callbacks=callbacks,
     default_root_dir=default_root_dir,
     accelerator="gpu",
-    devices=world_size,
+    devices= 8,
+    num_nodes = num_nodes,
     max_epochs=args.max_epochs,
     strategy="ddp",
     precision="16",
@@ -122,6 +127,10 @@ if args.checkpoint is None:
     trainer.test(model, datamodule=dm, ckpt_path="best")
 # Resume training from saved model checkpoint
 else:
+    trainer.fit(model, datamodule=dm, ckpt_path=args.checkpoint)
+    trainer.test(model, datamodule=dm)
+
+# Evaluate the model alone
 #    model = cl.LitModule.load_from_checkpoint(
 #        args.checkpoint,
 #        net=model.net,
@@ -132,7 +141,5 @@ else:
 #        test_loss=model.test_loss,
 #        test_target_tranfsorms=model.test_target_transforms,
 #    )
-    trainer.fit(model, datamodule=dm, ckpt_path=args.checkpoint)
-    trainer.test(model, datamodule=dm)
 
 #    trainer.test(model, datamodule=dm)
