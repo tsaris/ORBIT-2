@@ -12,10 +12,13 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, index
 
     lat, lon = dm.get_lat_lon()
     extent = [lon.min(), lon.max(), lat.min(), lat.max()]
-    channel = dm.hparams.out_vars.index(variable)
+    out_channel = dm.hparams.out_vars.index(variable)
+    in_channel = dm.hparams.in_vars.index(variable)
+
     history = dm.hparams.history
 
-    print("channel",channel,"history",history,flush=True)
+    print("dm.hparams",dm.hparams,flush=True)
+    print("out_channel",out_channel,"history",history,flush=True)
 
     if src == "era5":
         variable_with_units = f"{variable} ({ERA5_VAR_TO_UNIT[variable]})"
@@ -54,7 +57,7 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, index
         in_ax.set_ylabel("Latitude")
         imgs = []
         for time_step in range(history):
-            img = in_transform(xx[time_step])[channel].detach().cpu().numpy()
+            img = in_transform(xx[time_step])[in_channel].detach().cpu().numpy()
             if src == "era5":
                 img = np.flip(img, 0)
             img = in_ax.imshow(img, cmap=plt.cm.coolwarm, animated=True, extent=extent)
@@ -71,10 +74,13 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, index
         anim = animation.ArtistAnimation(in_fig, imgs, interval=1000, repeat_delay=2000)
         plt.close()
     else:
+
+        print("xx.shape",xx.shape,"in_channel",in_channel,flush=True)
+
         if dm.hparams.task == "downscaling":
-            img = in_transform(xx)[channel].detach().cpu().numpy()
+            img = in_transform(xx)[in_channel].detach().cpu().numpy()
         else:
-            img = in_transform(xx[0])[channel].detach().cpu().numpy()
+            img = in_transform(xx[0])[in_channel].detach().cpu().numpy()
         if src == "era5":
             img = np.flip(img, 0)
         visualize_sample(img, extent, f"Input: {variable_with_units}")
@@ -85,7 +91,7 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, index
 
     # Plot the ground truth
     yy = out_transform(y[adj_index])
-    yy = yy[channel].detach().cpu().numpy()
+    yy = yy[out_channel].detach().cpu().numpy()
     if src == "era5":
         yy = np.flip(yy, 0)
 
@@ -97,7 +103,7 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, index
 
     # Plot the prediction
     ppred = out_transform(pred[adj_index])
-    ppred = ppred[channel].detach().cpu().numpy()
+    ppred = ppred[out_channel].detach().cpu().numpy()
     if src == "era5":
         ppred = np.flip(ppred, 0)
     visualize_sample(ppred, extent, f"Prediction: {variable_with_units}")
