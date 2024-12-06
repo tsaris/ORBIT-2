@@ -7,17 +7,17 @@ from climate_learn.data.processing.era5_constants import (
 
 # Set up data
 variables = [
-#    "land_sea_mask",
-#    "orography",
-#    "lattitude",
+    "land_sea_mask",
+    "orography",
+    "lattitude",
 #    "toa_incident_solar_radiation",
     "2m_temperature",
 #    "10m_u_component_of_wind",
 #    "10m_v_component_of_wind",
-#    "geopotential",
-#    "temperature",
+    "geopotential",
+    "temperature",
 #    "relative_humidity",
-#    "specific_humidity",
+    "specific_humidity",
 #    "u_component_of_wind",
 #    "v_component_of_wind",
 ]
@@ -37,8 +37,8 @@ for var in variables:
 
 dm = cl.data.IterDataModule(
     "downscaling",
-    "/lustre/orion/lrn036/proj-shared/siyan/ERA5_process/ERA5_npz/5.625_deg", 
-    "/lustre/orion/lrn036/proj-shared/siyan/ERA5_process/ERA5_npz/1.40625_deg",
+    "/lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg", 
+    "/lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg",
     in_vars,
     out_vars=[out_var_dict["t2m"]],
     subsample=1,
@@ -49,15 +49,18 @@ dm = cl.data.IterDataModule(
 
 dm.setup()
 
+print("dm.hparams",dm.hparams,flush=True)
+
+
 # Set up deep learning model
-model = cl.load_downscaling_module(data_module=dm, architecture="unet")
+model = cl.load_downscaling_module(data_module=dm, architecture="vit")
 
 denorm = model.test_target_transforms[0]
 
 
 
 model = cl.LitModule.load_from_checkpoint(
-    "/lustre/orion/nro108/proj-shared/xf9/climate-learn/tutorial/unet_downscaling_t2m/checkpoints/epoch_007.ckpt",
+    "/lustre/orion/nro108/proj-shared/xf9/climate-learn/tutorial/vit_downscaling_t2m/checkpoints/epoch_011.ckpt",
     net=model.net,
     optimizer=model.optimizer,
     lr_scheduler=None,
