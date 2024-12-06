@@ -302,6 +302,12 @@ def load_architecture(task, data_module, architecture):
     elif task == "downscaling":
         in_channels, in_height, in_width = in_shape[1:]
         out_channels, out_height, out_width = out_shape[1:]
+
+        print("in_channels",in_channels,"in_height",in_height,"in_width",in_width,flush=True)
+
+        print("out_channels",out_channels,"out_height",out_height,"out_width",out_width,flush=True)
+
+
         if architecture.lower() in (
             "bilinear-interpolation",
             "nearest-interpolation",
@@ -319,19 +325,18 @@ def load_architecture(task, data_module, architecture):
                 backbone = ResNet(in_channels, out_channels, n_blocks=28)
             elif architecture == "unet":
                 backbone = Unet(
-                    in_channels, out_channels, ch_mults=[1, 1, 2], n_blocks=4,   hidden_channels=128,
-
+                    in_channels, out_channels, ch_mults=[1, 1, 2], n_blocks=4
                 )
             elif architecture == "vit":
                 backbone = VisionTransformer(
-                    (64, 128),
+                    (in_height, in_width),
                     in_channels,
                     out_channels,
                     history=1,
                     patch_size=2,
                     learn_pos_emb=True,
-                    embed_dim=128,
-                    depth=4,
+                    embed_dim=256,
+                    depth=6,
                     decoder_depth=1,
                     num_heads=4,
                     mlp_ratio=4,
@@ -342,13 +347,13 @@ def load_architecture(task, data_module, architecture):
                 Interpolation((out_height, out_width), "bilinear"), backbone
             )
             optimizer = load_optimizer(
-                model, "adamw", {"lr": 4e-5, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
+                model, "adamw", {"lr": 7e-5, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
             )
             lr_scheduler = load_lr_scheduler(
                 "linear-warmup-cosine-annealing",
                 optimizer,
                 {
-                    "warmup_epochs": 1,
+                    "warmup_epochs": 2,
                     "max_epochs": 50,
                     "warmup_start_lr": 1e-8,
                     "eta_min": 1e-8,
