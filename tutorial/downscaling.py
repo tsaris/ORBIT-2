@@ -106,6 +106,8 @@ callbacks = [
         dirpath=f"{default_root_dir}/checkpoints",
         monitor=early_stopping,
         filename="epoch_{epoch:03d}",
+        save_top_k=-1,  # Save all checkpoints
+        every_n_epochs=1,  # Save every epoch
         auto_insert_metric_name=False,
     ),
 ]
