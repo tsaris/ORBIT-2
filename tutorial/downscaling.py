@@ -12,11 +12,15 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     ModelCheckpoint,
     RichModelSummary,
-#    RichProgressBar,
 )
 from pytorch_lightning.loggers.tensorboard import TensorBoardLogger
 import os
 import torch
+from pytorch_lightning.strategies import FSDPStrategy
+from timm.models.vision_transformer import Block
+from pytorch_lightning.callbacks import DeviceStatsMonitor
+import functools
+from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
 os.environ['MASTER_ADDR'] = str(os.environ['HOSTNAME'])
 os.environ['MASTER_PORT'] = "29500"
@@ -85,7 +89,7 @@ dm = cl.data.IterDataModule(
     out_vars=[out_var_dict[args.variable]],
     subsample=1,
     batch_size=32,
-    buffer_size=1000,
+    buffer_size=500,
     num_workers=1,
 )
 dm.setup()
@@ -98,10 +102,13 @@ pl.seed_everything(0)
 default_root_dir = f"{args.preset}_downscaling_{args.variable}"
 logger = TensorBoardLogger(save_dir=f"{default_root_dir}/logs")
 early_stopping = "train/mse:aggregate"
+
+gpu_stats = DeviceStatsMonitor()
+
 callbacks = [
-#    RichProgressBar(),
     RichModelSummary(max_depth=args.summary_depth),
     EarlyStopping(monitor=early_stopping,patience=args.patience),
+    gpu_stats,
     ModelCheckpoint(
         dirpath=f"{default_root_dir}/checkpoints",
         monitor=early_stopping,
@@ -111,6 +118,20 @@ callbacks = [
         auto_insert_metric_name=False,
     ),
 ]
+
+#policy = {Block}
+
+auto_wrap_policy = functools.partial(
+    transformer_auto_wrap_policy,
+    transformer_layer_cls={
+            Block  # < ---- Your Transformer layer class
+    },
+)
+
+strategy = FSDPStrategy(auto_wrap_policy=auto_wrap_policy,activation_checkpointing=Block)
+
+
+
 trainer = pl.Trainer(
     logger=logger,
     callbacks=callbacks,
@@ -119,7 +140,7 @@ trainer = pl.Trainer(
     devices= 8,
     num_nodes = num_nodes,
     max_epochs=args.max_epochs,
-    strategy="ddp",
+    strategy=strategy,
     precision="16",
 )
 
