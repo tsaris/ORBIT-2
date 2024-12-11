@@ -60,7 +60,8 @@ class VisionTransformer(nn.Module):
 
         self.head = nn.ModuleList()
         for _ in range(decoder_depth):
-            self.head.append(nn.Linear(embed_dim, embed_dim))
+#            self.head.append(nn.Linear(embed_dim, embed_dim))
+            self.head.append(nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(3, 3), stride=1, padding=1)) 
             self.head.append(nn.GELU())
         self.head.append(nn.Linear(embed_dim, out_channels * patch_size**2))
         self.head = nn.Sequential(*self.head)
@@ -117,8 +118,12 @@ class VisionTransformer(nn.Module):
             x = x.flatten(1, 2)
         # x.shape = [B,T*in_channels,H,W]
         x = self.forward_encoder(x)
+
+        x = torch.unsqueeze(x, 1)
         # x.shape = [B,num_patches,embed_dim]
         x = self.head(x)
+  
+        x= torch.squeeze(x)
         # x.shape = [B,num_patches,embed_dim]
         preds = self.unpatchify(x)
         # preds.shape = [B,out_channels,H,W]
