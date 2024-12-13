@@ -332,8 +332,10 @@ def load_architecture(task, data_module, architecture):
                     (in_height, in_width),
                     in_channels,
                     out_channels,
+                    superres_factor = 4,
                     history=1,
                     patch_size=2,
+                    cnn_ratio = 4,
                     learn_pos_emb=True,
                     embed_dim=256,
                     depth=6,
@@ -344,10 +346,10 @@ def load_architecture(task, data_module, architecture):
             else:
                 raise_not_impl()
             model = nn.Sequential(
-                Interpolation((out_height, out_width), "bilinear"), backbone
+                backbone
             )
             optimizer = load_optimizer(
-                model, "adamw", {"lr": 7e-5, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
+                model, "adamw", {"lr": 1e-4, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
             )
             lr_scheduler = load_lr_scheduler(
                 "linear-warmup-cosine-annealing",
