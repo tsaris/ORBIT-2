@@ -63,9 +63,13 @@ class VisionTransformer(nn.Module):
         self.norm = nn.LayerNorm(embed_dim)
 
 
+        self.path2 = nn.ModuleList()
+        self.path2.append(nn.Conv2d(in_channels=in_channels, out_channels=cnn_ratio*superres_factor*superres_factor, kernel_size=(3, 3), stride=1, padding=1)) 
+        self.path2.append(nn.PixelShuffle(superres_factor))
+        self.path2.append(nn.Conv2d(in_channels=cnn_ratio, out_channels=out_channels, kernel_size=(3, 3), stride=1, padding=1)) 
+        self.path2 = nn.Sequential(*self.path2)
 
-        self.upscale = nn.Conv2d(in_channels=1, out_channels=cnn_ratio*superres_factor*superres_factor, kernel_size=(3, 3), stride=1, padding=1) 
-        self.downscale = nn.Conv2d(in_channels=cnn_ratio, out_channels=out_channels, kernel_size=(3, 3), stride=1, padding=1) 
+
 
 
 
@@ -127,37 +131,6 @@ class VisionTransformer(nn.Module):
         #if torch.distributed.get_rank()==0:
         #    print("after patch_embed x.shape",x.shape,flush=True)
 
-        path2_result = x.unsqueeze(dim=1)
-
-
-        #if torch.distributed.get_rank()==0:
-        #    print("after unsqueeze path2_result.shape",path2_result.shape,flush=True)
-
-        path2_result = self.upscale(path2_result)
-
-        #if torch.distributed.get_rank()==0:
-        #    print("after upscale path2_result.shape",path2_result.shape,flush=True)
-
-        path2_result = rearrange(path2_result,'n (c r) l h -> n c (r l) h',c=self.cnn_ratio,r=(self.superres_factor*self.superres_factor))
-
-
-        path2_result = self.downscale(path2_result)
-
-
-        #if torch.distributed.get_rank()==0:
-        #    print("after downscale path2_result.shape",path2_result.shape,flush=True)
-
-
-        path2_result = torch.squeeze(path2_result)
-
-
-        #if torch.distributed.get_rank()==0:
-        #    print("after squeeze path2_result.shape",path2_result.shape,flush=True)
-
-
-        #if torch.distributed.get_rank()==0:
-        #    print("after path2 path2_result.shape",path2_result.shape,flush=True)
-
 
         x = x + self.pos_embed
         x = self.pos_drop(x)
@@ -165,7 +138,7 @@ class VisionTransformer(nn.Module):
             x = blk(x)
         # x.shape = [B,num_patches,embed_dim]
         x = self.norm(x)
-        return x, path2_result
+        return x
 
     def forward(self, x):
         if len(x.shape) == 5:  # x.shape = [B,T,in_channels,H,W]
@@ -173,44 +146,18 @@ class VisionTransformer(nn.Module):
         # x.shape = [B,T*in_channels,H,W]
 
  
-        #if torch.distributed.get_rank()==0:
-        #    print("forward begin x.shape",x.shape,flush=True)
-
-     
-        x, path2_result = self.forward_encoder(x)
-
- 
-        #if torch.distributed.get_rank()==0:
-        #    print("forward_encoder x.shape",x.shape,"path2_result.shape",path2_result.shape,flush=True)
-
-
+        path2_result = x
+        
+        x = self.forward_encoder(x)
 
         # x.shape = [B,num_patches,embed_dim]
         x = self.head(x)
 
  
-        #if torch.distributed.get_rank()==0:
-        #    print("after self.head x.shape",x.shape,flush=True)
-
-
- 
         # x.shape = [B,num_patches,embed_dim]
         x = self.unpatchify(x)
-
- 
-        #if torch.distributed.get_rank()==0:
-        #    print("after unpatchify x.shape",x.shape,flush=True)
-
- 
-        #if torch.distributed.get_rank()==0:
-        #    print("after path1 self.path1(x).shape",self.path1(x).shape,flush=True)
-
-  
-        #if torch.distributed.get_rank()==0:
-        #    print("after self.unpatchify(self.head(path2_result),scaling=4).shape",self.unpatchify(self.head(path2_result),scaling=4).shape,flush=True)
-
      
-        preds = self.path1(x) + self.unpatchify(self.head(path2_result),scaling=4)
+        preds = self.path1(x) + self.path2(path2_result)
  
         # preds.shape = [B,out_channels,H,W]
         return preds
