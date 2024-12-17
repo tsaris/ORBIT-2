@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH -A nro108
 #SBATCH -J flash
-#SBATCH --nodes=4
+#SBATCH --nodes=1
 #SBATCH --gres=gpu:8
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
-#SBATCH -t 00:50:00
+#SBATCH -t 01:00:00
 #SBATCH -q debug
 #SBATCH -o flash-%j.out
 #SBATCH -e flash-%j.out
@@ -44,5 +44,5 @@ export OMP_NUM_THREADS=7
 export PYTHONPATH=$PWD:$PYTHONPATH
 
 time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-python ./downscaling.py --max_epochs 30 --checkpoint "./vit_downscaling_t2m/checkpoints/epoch_011.ckpt" /lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg/ /lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg/ vit t2m
+python ./downscaling.py --max_epochs 30 /lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg/ /lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg/ vit t2m
 
