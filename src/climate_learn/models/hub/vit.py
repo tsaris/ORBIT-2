@@ -73,12 +73,13 @@ class VisionTransformer(nn.Module):
 
 
 
-        self.path1 = nn.ModuleList()
-        self.path1.append(nn.Conv2d(in_channels=out_channels, out_channels=cnn_ratio*superres_factor*superres_factor, kernel_size=(3, 3), stride=1, padding=1)) 
-        self.path1.append(nn.PixelShuffle(superres_factor))
-        self.path1.append(nn.Conv2d(in_channels=cnn_ratio, out_channels=out_channels, kernel_size=(3, 3), stride=1, padding=1)) 
-        self.path1 = nn.Sequential(*self.path1)
+#        self.path1 = nn.ModuleList()
+#        self.path1.append(nn.Conv2d(in_channels=out_channels, out_channels=cnn_ratio*superres_factor*superres_factor, kernel_size=(3, 3), stride=1, padding=1)) 
+#        self.path1.append(nn.PixelShuffle(superres_factor))
+#        self.path1.append(nn.Conv2d(in_channels=cnn_ratio, out_channels=out_channels, kernel_size=(3, 3), stride=1, padding=1)) 
+#        self.path1 = nn.Sequential(*self.path1)
 
+        self.path1 = nn.Linear(self.img_size[1], self.img_size[1]*superres_factor*superres_factor)
 
 
         self.head = nn.ModuleList()
@@ -156,8 +157,8 @@ class VisionTransformer(nn.Module):
  
         # x.shape = [B,num_patches,embed_dim]
         x = self.unpatchify(x)
-     
-        preds = self.path1(x) + self.path2(path2_result)
+    
+        preds = rearrange(self.path1(x),"b c h (w s1 s2) -> b c (h s1) (w s2)",s1= self.superres_factor,s2=self.superres_factor) + self.path2(path2_result)
  
         # preds.shape = [B,out_channels,H,W]
         return preds
