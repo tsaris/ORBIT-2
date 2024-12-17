@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=7
-#SBATCH -t 00:30:00
+#SBATCH -t 00:10:00
 #SBATCH -q debug
 #SBATCH -o flash-%j.out
 #SBATCH -e flash-%j.out
