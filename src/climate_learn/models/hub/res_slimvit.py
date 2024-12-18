@@ -7,16 +7,18 @@ from .utils import register
 import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Block, PatchEmbed, trunc_normal_
+from einops import rearrange
 
-
-@register("vit")
-class VisionTransformer(nn.Module):
+@register("res_slimvit")
+class Res_Slim_ViT(nn.Module):
     def __init__(
         self,
         img_size,
         in_channels,
         out_channels,
         history,
+        superres_factor = 4,
+        cnn_ratio = 4,
         patch_size=16,
         drop_path=0.1,
         drop_rate=0.1,
@@ -29,6 +31,8 @@ class VisionTransformer(nn.Module):
     ):
         super().__init__()
         self.img_size = img_size
+        self.cnn_ratio = cnn_ratio
+        self.superres_factor = superres_factor
         self.in_channels = in_channels * history
         self.out_channels = out_channels
         self.patch_size = patch_size
@@ -58,6 +62,26 @@ class VisionTransformer(nn.Module):
         )
         self.norm = nn.LayerNorm(embed_dim)
 
+
+        self.path2 = nn.ModuleList()
+        self.path2.append(nn.Conv2d(in_channels=in_channels, out_channels=cnn_ratio*superres_factor*superres_factor, kernel_size=(3, 3), stride=1, padding=1)) 
+        self.path2.append(nn.PixelShuffle(superres_factor))
+        self.path2.append(nn.Conv2d(in_channels=cnn_ratio, out_channels=out_channels, kernel_size=(3, 3), stride=1, padding=1)) 
+        self.path2 = nn.Sequential(*self.path2)
+
+
+
+
+
+#        self.path1 = nn.ModuleList()
+#        self.path1.append(nn.Conv2d(in_channels=out_channels, out_channels=cnn_ratio*superres_factor*superres_factor, kernel_size=(3, 3), stride=1, padding=1)) 
+#        self.path1.append(nn.PixelShuffle(superres_factor))
+#        self.path1.append(nn.Conv2d(in_channels=cnn_ratio, out_channels=out_channels, kernel_size=(3, 3), stride=1, padding=1)) 
+#        self.path1 = nn.Sequential(*self.path1)
+
+        self.path1 = nn.Linear(self.img_size[1], self.img_size[1]*superres_factor*superres_factor)
+
+
         self.head = nn.ModuleList()
         for _ in range(decoder_depth):
             self.head.append(nn.Linear(embed_dim, embed_dim))
@@ -85,15 +109,15 @@ class VisionTransformer(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def unpatchify(self, x: torch.Tensor):
+    def unpatchify(self, x: torch.Tensor, scaling =1):
         """
         x: (B, L, V * patch_size**2)
         return imgs: (B, V, H, W)
         """
         p = self.patch_size
         c = self.out_channels
-        h = self.img_size[0] // p
-        w = self.img_size[1] // p
+        h = self.img_size[0] * scaling // p
+        w = self.img_size[1] *scaling // p
         assert h * w == x.shape[1]
         x = x.reshape(shape=(x.shape[0], h, w, p, p, c))
         x = torch.einsum("nhwpqc->nchpwq", x)
@@ -104,6 +128,11 @@ class VisionTransformer(nn.Module):
         # x.shape = [B,C,H,W]
         x = self.patch_embed(x)
         # x.shape = [B,num_patches,embed_dim]
+
+        #if torch.distributed.get_rank()==0:
+        #    print("after patch_embed x.shape",x.shape,flush=True)
+
+
         x = x + self.pos_embed
         x = self.pos_drop(x)
         for blk in self.blocks:
@@ -116,10 +145,20 @@ class VisionTransformer(nn.Module):
         if len(x.shape) == 5:  # x.shape = [B,T,in_channels,H,W]
             x = x.flatten(1, 2)
         # x.shape = [B,T*in_channels,H,W]
+
+ 
+        path2_result = x
+        
         x = self.forward_encoder(x)
+
         # x.shape = [B,num_patches,embed_dim]
         x = self.head(x)
+
+ 
         # x.shape = [B,num_patches,embed_dim]
-        preds = self.unpatchify(x)
+        x = self.unpatchify(x)
+    
+        preds = rearrange(self.path1(x),"b c h (w s1 s2) -> b c (h s1) (w s2)",s1= self.superres_factor,s2=self.superres_factor) + self.path2(path2_result)
+ 
         # preds.shape = [B,out_channels,H,W]
         return preds
