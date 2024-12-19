@@ -18,6 +18,15 @@ import os
 import torch
 from pytorch_lightning.strategies import FSDPStrategy
 from timm.models.vision_transformer import Block
+from climate_learn.models.hub.components.cnn_blocks import (
+    DownBlock,
+    MiddleBlock,
+    UpBlock,
+    ResidualBlock
+)
+
+
+
 from pytorch_lightning.callbacks import DeviceStatsMonitor
 import functools
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
@@ -43,7 +52,7 @@ if world_rank==0:
 parser = ArgumentParser()
 parser.add_argument("era5_low_res_dir")
 parser.add_argument("era5_high_res_dir")
-parser.add_argument("preset", choices=["resnet", "unet", "vit"])
+parser.add_argument("preset", choices=["resnet", "unet", "vit","res_slimvit"])
 parser.add_argument(
     "variable", choices=["t2m", "z500", "t850"], help="The variable to predict."
 )
@@ -97,6 +106,11 @@ dm.setup()
 # Set up deep learning model
 model = cl.load_downscaling_module(data_module=dm, architecture=args.preset)
 
+
+if world_rank==0:
+    print("print model here",model,flush=True)
+
+
 # Setup trainer
 pl.seed_everything(0)
 default_root_dir = f"{args.preset}_downscaling_{args.variable}"
@@ -119,16 +133,35 @@ callbacks = [
     ),
 ]
 
-#policy = {Block}
-
-auto_wrap_policy = functools.partial(
-    transformer_auto_wrap_policy,
-    transformer_layer_cls={
+if args.preset =="vit" or args.preset=="res_slimvit":
+   
+    auto_wrap_policy = functools.partial(
+        transformer_auto_wrap_policy,
+        transformer_layer_cls={
             Block  # < ---- Your Transformer layer class
-    },
-)
+        },
+    )
 
-strategy = FSDPStrategy(auto_wrap_policy=auto_wrap_policy,activation_checkpointing=Block)
+    strategy = FSDPStrategy(auto_wrap_policy=auto_wrap_policy,activation_checkpointing=Block)
+
+elif args.preset =="unet":
+    auto_wrap_policy = functools.partial(
+        transformer_auto_wrap_policy,
+        transformer_layer_cls={
+            UpBlock,DownBlock,MiddleBlock  # < ---- Your Transformer layer class
+        },
+    )
+
+    strategy = FSDPStrategy(auto_wrap_policy=auto_wrap_policy,activation_checkpointing=[UpBlock,DownBlock,MiddleBlock])
+else: #resnet
+    auto_wrap_policy = functools.partial(
+        transformer_auto_wrap_policy,
+        transformer_layer_cls={
+            ResidualBlock  # < ---- Your Transformer layer class
+        },
+    )
+
+    strategy = FSDPStrategy(auto_wrap_policy=auto_wrap_policy,activation_checkpointing=ResidualBlock)
 
 
 
@@ -147,11 +180,11 @@ trainer = pl.Trainer(
 # Train and evaluate model from scratch
 if args.checkpoint is None:
     trainer.fit(model, datamodule=dm)
-    trainer.test(model, datamodule=dm, ckpt_path="best")
+    trainer.validate(model, datamodule=dm)
 # Resume training from saved model checkpoint
 else:
     trainer.fit(model, datamodule=dm, ckpt_path=args.checkpoint)
-    trainer.test(model, datamodule=dm)
+    trainer.validate(model, datamodule=dm)
 
 # Evaluate the model alone
 #    model = cl.LitModule.load_from_checkpoint(
