@@ -14,6 +14,7 @@ from ..models.hub import (
     ResNet,
     Unet,
     VisionTransformer,
+    Res_Slim_ViT,
 )
 from ..models.lr_scheduler import LinearWarmupCosineAnnealingLR
 from ..transforms import TRANSFORMS_REGISTRY
@@ -329,7 +330,7 @@ def load_architecture(task, data_module, architecture):
                 )
             elif architecture == "vit":
                 backbone = VisionTransformer(
-                    (in_height, in_width),
+                    (out_height, out_width),
                     in_channels,
                     out_channels,
                     history=1,
@@ -341,13 +342,39 @@ def load_architecture(task, data_module, architecture):
                     num_heads=4,
                     mlp_ratio=4,
                 )
+
+            elif architecture == "res_slimvit":
+                backbone = Res_Slim_ViT(
+                    (in_height, in_width),
+                    in_channels,
+                    out_channels,
+                    superres_factor = 4,
+                    history=1,
+                    patch_size=2,
+                    cnn_ratio = 4,
+                    learn_pos_emb=True,
+                    embed_dim=256,
+                    depth=6,
+                    decoder_depth=1,
+                    num_heads=4,
+                    mlp_ratio=4,
+                )
+
+
             else:
                 raise_not_impl()
-            model = nn.Sequential(
-                Interpolation((out_height, out_width), "bilinear"), backbone
-            )
+
+            if architecture == "res_slimvit":
+                model = nn.Sequential(
+                    backbone
+                )
+            else:
+                model = nn.Sequential(
+                    Interpolation((out_height, out_width), "bilinear"), backbone
+                )
+
             optimizer = load_optimizer(
-                model, "adamw", {"lr": 7e-5, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
+                model, "adamw", {"lr": 1e-4, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
             )
             lr_scheduler = load_lr_scheduler(
                 "linear-warmup-cosine-annealing",

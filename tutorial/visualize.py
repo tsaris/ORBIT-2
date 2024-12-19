@@ -21,7 +21,7 @@ from timm.models.vision_transformer import Block
 from pytorch_lightning.callbacks import DeviceStatsMonitor
 import functools
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
-
+from datetime import timedelta
 
 
 os.environ['MASTER_ADDR'] = str(os.environ['HOSTNAME'])
@@ -37,6 +37,7 @@ local_rank = int(os.environ['SLURM_LOCALID'])
 torch.cuda.set_device(local_rank)
 device = torch.cuda.current_device()
 
+torch.distributed.init_process_group('nccl', timeout=timedelta(seconds=7200000), rank=world_rank, world_size=world_size)
 
 num_nodes = 1
 # assuming we are downscaling geopotential from ERA5
@@ -97,7 +98,7 @@ denorm = model.test_target_transforms[0]
 
 
 model = cl.LitModule.load_from_checkpoint(
-    "/lustre/orion/nro108/proj-shared/xf9/climate-learn/tutorial/vit_downscaling_t2m/checkpoints/epoch_009.ckpt",
+    "/lustre/orion/nro108/proj-shared/xf9/climate-learn/tutorial/vit_downscaling_t2m/checkpoints/epoch_013.ckpt",
     net=model.net,
     optimizer=model.optimizer,
     lr_scheduler=None,

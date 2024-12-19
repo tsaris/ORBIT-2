@@ -111,8 +111,11 @@ class IterDataModule(pl.LightningDataModule):
         return self.hparams.in_vars, out_vars
 
     def get_data_dims(self):
-        lat = len(np.load(os.path.join(self.hparams.out_root_dir, "lat.npy")))
-        lon = len(np.load(os.path.join(self.hparams.out_root_dir, "lon.npy")))
+        in_lat = len(np.load(os.path.join(self.hparams.inp_root_dir, "lat.npy")))
+        in_lon = len(np.load(os.path.join(self.hparams.inp_root_dir, "lon.npy")))
+        out_lat = len(np.load(os.path.join(self.hparams.out_root_dir, "lat.npy")))
+        out_lon = len(np.load(os.path.join(self.hparams.out_root_dir, "lon.npy")))
+
         forecasting_tasks = [
             "direct-forecasting",
             "iterative-forecasting",
@@ -124,19 +127,19 @@ class IterDataModule(pl.LightningDataModule):
                     self.hparams.batch_size,
                     self.hparams.history,
                     len(self.hparams.in_vars),
-                    lat,
-                    lon,
+                    out_lat,
+                    out_lon,
                 ]
             )
         elif self.hparams.task == "downscaling":
             in_size = torch.Size(
-                [self.hparams.batch_size, len(self.hparams.in_vars), lat, lon]
+                [self.hparams.batch_size, len(self.hparams.in_vars), in_lat, in_lon]
             )
         ##TODO: change out size
         out_vars = copy.deepcopy(self.hparams.out_vars)
         if "2m_temperature_extreme_mask" in out_vars:
             out_vars.remove("2m_temperature_extreme_mask")
-        out_size = torch.Size([self.hparams.batch_size, len(out_vars), lat, lon])
+        out_size = torch.Size([self.hparams.batch_size, len(out_vars), out_lat, out_lon])
         return in_size, out_size
 
     def get_normalize(self, root_dir, variables):
