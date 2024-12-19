@@ -15,7 +15,7 @@ To run it, use the job scheduler to run the job launch_downscaling.sh
 `python ./downscaling.py --max_epochs 30 /lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg/ /lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg/ vit t2m`
 
 In the above line --max_epochs is the maximum number of epochs. "/lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg/" is the input coarse resolution data path. "/lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg/" is the ground truth high resolution data path. 
-"vit" is the AI architecture. Besides "**vit**", you can also use "**resnet**" and "**unet**" architecture by setting the corresponding flag.
+"vit" is an AI architecture of choice. Besides "**vit**", you can also use "**resnet**", "**unet**" or "**res_slimvit" architecture by setting the corresponding flag.
 "t2m" is the output variable. To show how to predict multiple variables, we will use an example with t2m, z500, t850 three variables. then replace "t2m" in the above code line with `["t2m", "z500", "t850"]`.
 You can also request multiple nodes by setting `#SBATCH --nodes=1`  and set --nodes to be larger than 1.
 
