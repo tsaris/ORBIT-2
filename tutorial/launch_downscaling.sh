@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:8
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
-#SBATCH -t 01:00:00
+#SBATCH -t 00:20:00
 #SBATCH -q debug
 #SBATCH -o flash-%j.out
 #SBATCH -e flash-%j.out
@@ -22,7 +22,7 @@ source ~/miniconda3/etc/profile.d/conda.sh
 
 module load PrgEnv-gnu
 module load gcc/12.2.0
-module load rocm/6.2.0 libtool
+module load rocm/6.2.0
 
 eval "$(/lustre/orion/world-shared/stf218/atsaris/env_test_march/miniconda/bin/conda shell.bash hook)"
 
@@ -45,4 +45,3 @@ export PYTHONPATH=$PWD:$PYTHONPATH
 
 time srun -n $((SLURM_JOB_NUM_NODES*8)) \
 python ./downscaling.py --max_epochs 30 /lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg/ /lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg/ vit t2m
-
