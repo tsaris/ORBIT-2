@@ -19,11 +19,12 @@ To run it, use the job scheduler to run the job launch_downscaling.sh
 
 In the above line --max_epochs is the maximum number of epochs. "/lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg/" is the input coarse resolution data path. "/lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg/" is the ground truth high resolution data path. 
 "vit" is an AI architecture of choice. Besides "**vit**", you can also use "**resnet**", "**unet**" or "**res_slimvit**" architecture by setting the corresponding flag.
-"t2m" is the output variable. To show how to predict multiple variables, we will use an example with t2m, z500, t850 three variables. then replace "t2m" in the above code line with `["t2m", "z500", "t850"]`.
-You can also request multiple nodes by setting `#SBATCH --nodes=1`  and set --nodes to be larger than 1.
+"t2m" is the output variable. Some other example output variables to choose include t2m (surface temperature), z500 (500 hpa geopotential), t850 (temperature at 850 hpa), and u10 (u component of wind at 10m). 
+The input variables can be changed in the code downscaling.py
+You can also request multiple nodes by changing `#SBATCH --nodes=1`  and set --nodes to be larger than 1.
 
 
-(5) To visualize the input and output, run launch_visualize.sh afterwards. Use only a single node with a single GPU.
+(5) To visualize the input and output, run launch_visualize.sh afterwards. Use only a single node with a single GPU. In visualize.py, do not forget to change the AI architecture choice and checkpoint path according to the training setup.
 
 **Available Training Data**
 ERA5 5.6 degree "/lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg/" 
