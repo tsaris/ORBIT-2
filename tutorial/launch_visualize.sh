@@ -22,7 +22,7 @@ source ~/miniconda3/etc/profile.d/conda.sh
 
 module load PrgEnv-gnu
 module load gcc/12.2.0
-module load rocm/6.2.0 libtool
+module load rocm/6.2.0
 
 eval "$(/lustre/orion/world-shared/stf218/atsaris/env_test_march/miniconda/bin/conda shell.bash hook)"
 
