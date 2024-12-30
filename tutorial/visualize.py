@@ -49,8 +49,8 @@ variables = [
     "lattitude",
 #    "toa_incident_solar_radiation",
     "2m_temperature",
-#    "10m_u_component_of_wind",
-#    "10m_v_component_of_wind",
+    "10m_u_component_of_wind",
+    "10m_v_component_of_wind",
     "geopotential",
     "temperature",
 #    "relative_humidity",
@@ -59,9 +59,11 @@ variables = [
 #    "v_component_of_wind",
 ]
 out_var_dict = {
-    "t2m": "2m_temperature",
+#    "t2m": "2m_temperature",
 #    "z500": "geopotential_500",
 #    "t850": "temperature_850",
+     "u10": "10m_u_component_of_wind"
+
 }
 in_vars = []
 for var in variables:
@@ -77,7 +79,7 @@ dm = cl.data.IterDataModule(
     "/lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg", 
     "/lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg",
     in_vars,
-    out_vars=[out_var_dict["t2m"]],
+    out_vars=[out_var_dict["u10"]],
     subsample=1,
     batch_size=32,
     buffer_size=500,
@@ -90,7 +92,7 @@ print("dm.hparams",dm.hparams,flush=True)
 
 
 # Set up deep learning model
-model = cl.load_downscaling_module(data_module=dm, architecture="vit")
+model = cl.load_downscaling_module(data_module=dm, architecture="res_slimvit")
 
 model = model.to(device)
 
@@ -98,7 +100,7 @@ denorm = model.test_target_transforms[0]
 
 
 model = cl.LitModule.load_from_checkpoint(
-    "/lustre/orion/nro108/proj-shared/xf9/climate-learn/tutorial/vit_downscaling_t2m/checkpoints/epoch_013.ckpt",
+    "/lustre/orion/nro108/proj-shared/xf9/climate-learn/tutorial/res_slimvit_downscaling_u10/checkpoints/epoch_010-v2.ckpt",
     net=model.net,
     optimizer=model.optimizer,
     lr_scheduler=None,
@@ -113,7 +115,7 @@ model = model.to(device)
 
 # Setup trainer
 pl.seed_everything(0)
-early_stopping = "train/mse:aggregate"
+early_stopping = "train/mae:aggregate"
 
 gpu_stats = DeviceStatsMonitor()
 
@@ -146,7 +148,7 @@ cl.utils.visualize.visualize_at_index(
     dm,
     in_transform=denorm,
     out_transform=denorm,
-    variable="2m_temperature",
+    variable="10m_u_component_of_wind",
     src="era5",
     index=0  # visualize the first sample of the test set
 )
