@@ -54,7 +54,7 @@ parser.add_argument("era5_low_res_dir")
 parser.add_argument("era5_high_res_dir")
 parser.add_argument("preset", choices=["resnet", "unet", "vit","res_slimvit"])
 parser.add_argument(
-    "variable", choices=["t2m", "z500", "t850"], help="The variable to predict."
+    "variable", choices=["t2m", "z500", "t850","u10"], help="The variable to predict."
 )
 parser.add_argument("--summary_depth", type=int, default=1)
 parser.add_argument("--max_epochs", type=int, default=50)
@@ -69,8 +69,8 @@ variables = [
     "lattitude",
 #    "toa_incident_solar_radiation",
     "2m_temperature",
-#    "10m_u_component_of_wind",
-#    "10m_v_component_of_wind",
+    "10m_u_component_of_wind",
+    "10m_v_component_of_wind",
     "geopotential",
     "temperature",
 #    "relative_humidity",
@@ -79,9 +79,10 @@ variables = [
 #    "v_component_of_wind",
 ]
 out_var_dict = {
-    "t2m": "2m_temperature",
+#    "t2m": "2m_temperature",
 #    "z500": "geopotential_500",
 #    "t850": "temperature_850",
+     "u10": "10m_u_component_of_wind"
 }
 in_vars = []
 for var in variables:
@@ -174,17 +175,17 @@ trainer = pl.Trainer(
     num_nodes = num_nodes,
     max_epochs=args.max_epochs,
     strategy=strategy,
-    precision="16",
+    precision="bf16-mixed",
 )
 
 # Train and evaluate model from scratch
 if args.checkpoint is None:
     trainer.fit(model, datamodule=dm)
-    trainer.validate(model, datamodule=dm)
+    trainer.test(model, datamodule=dm)
 # Resume training from saved model checkpoint
 else:
     trainer.fit(model, datamodule=dm, ckpt_path=args.checkpoint)
-    trainer.validate(model, datamodule=dm)
+    trainer.test(model, datamodule=dm)
 
 # Evaluate the model alone
 #    model = cl.LitModule.load_from_checkpoint(
