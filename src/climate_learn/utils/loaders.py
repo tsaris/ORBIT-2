@@ -25,10 +25,10 @@ import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import _LRScheduler as LRScheduler
 
-
 def load_model_module(
-    task: str,
+    device,
     data_module,
+    task: str,
     architecture: Optional[str] = None,
     model: Optional[Union[str, nn.Module]] = None,
     model_kwargs: Optional[Dict[str, Any]] = None,
@@ -107,7 +107,7 @@ def load_model_module(
         print(f"Loading training loss: {train_loss}")
         clim = get_climatology(data_module, "train")
         metainfo = MetricsMetaInfo(in_vars, out_vars, lat, lon, clim)
-        train_loss = load_loss(train_loss, True, metainfo)
+        train_loss = load_loss(device,train_loss, True, metainfo)
     elif isinstance(train_loss, Callable):
         print("Using custom training loss")
     else:
@@ -133,7 +133,7 @@ def load_model_module(
             clim = get_climatology(data_module, "val")
             metainfo = MetricsMetaInfo(in_vars, out_vars, lat, lon, clim)
             print(f"Loading validation loss: {vl}")
-            val_losses.append(load_loss(vl, False, metainfo))
+            val_losses.append(load_loss(device,vl, False, metainfo))
         elif isinstance(vl, Callable):
             print("Using custom validation loss")
             val_losses.append(vl)
@@ -170,7 +170,7 @@ def load_model_module(
             clim = get_climatology(data_module, "test")
             metainfo = MetricsMetaInfo(in_vars, out_vars, lat, lon, clim)
             print(f"Loading test loss: {tl}")
-            test_losses.append(load_loss(tl, False, metainfo))
+            test_losses.append(load_loss(device,tl, False, metainfo))
         elif isinstance(tl, Callable):
             print("Using custom testing loss")
             test_losses.append(tl)
@@ -238,8 +238,8 @@ load_climatebench_module = partial(
 load_downscaling_module = partial(
     load_model_module,
     task="downscaling",
-    train_loss="mse",
-    val_loss=["rmse", "pearson", "mean_bias", "mse"],
+    train_loss="perceptual",
+    val_loss=["rmse", "pearson", "mean_bias", "mae"],
     test_loss=["rmse", "pearson", "mean_bias"],
     train_target_transform=None,
     val_target_transform=["denormalize", "denormalize", "denormalize", None],
@@ -435,8 +435,13 @@ def load_lr_scheduler(
     return lr_scheduler
 
 
-def load_loss(loss_name, aggregate_only, metainfo):
+def load_loss(device,loss_name, aggregate_only, metainfo):
     loss_cls = METRICS_REGISTRY.get(loss_name, None)
+
+    if loss_name=="perceptual":
+        loss = loss_cls(device,aggregate_only=aggregate_only, metainfo=metainfo)
+        return loss
+
     if loss_cls is None:
         raise NotImplementedError(
             f"{loss_name} is not an implemented loss. If you think it should be,"
