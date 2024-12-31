@@ -105,7 +105,7 @@ dm = cl.data.IterDataModule(
 dm.setup()
 
 # Set up deep learning model
-model = cl.load_downscaling_module(data_module=dm, architecture=args.preset)
+model = cl.load_downscaling_module(device,data_module=dm, architecture=args.preset)
 
 
 if world_rank==0:
@@ -116,7 +116,7 @@ if world_rank==0:
 pl.seed_everything(0)
 default_root_dir = f"{args.preset}_downscaling_{args.variable}"
 logger = TensorBoardLogger(save_dir=f"{default_root_dir}/logs")
-early_stopping = "train/mse:aggregate"
+early_stopping = "train/perceptual:aggregate"
 
 gpu_stats = DeviceStatsMonitor()
 
