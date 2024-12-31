@@ -7,6 +7,18 @@ from .utils import Pred, handles_probabilistic
 # Third party
 import torch
 import torch.nn.functional as F
+import lpips
+from einops import repeat
+
+@handles_probabilistic
+def perceptual(
+    loss_fn,
+    pred: Pred,
+    target: Union[torch.FloatTensor, torch.DoubleTensor]
+) -> Union[torch.FloatTensor, torch.DoubleTensor]:
+
+    error = loss_fn(pred, target) 
+    return error
 
 
 @handles_probabilistic
