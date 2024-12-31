@@ -92,7 +92,7 @@ print("dm.hparams",dm.hparams,flush=True)
 
 
 # Set up deep learning model
-model = cl.load_downscaling_module(data_module=dm, architecture="res_slimvit")
+model = cl.load_downscaling_module(device, data_module=dm, architecture="res_slimvit")
 
 model = model.to(device)
 
@@ -100,7 +100,7 @@ denorm = model.test_target_transforms[0]
 
 
 model = cl.LitModule.load_from_checkpoint(
-    "/lustre/orion/nro108/proj-shared/xf9/climate-learn/tutorial/res_slimvit_downscaling_u10/checkpoints/epoch_010-v2.ckpt",
+    "/lustre/orion/nro108/proj-shared/xf9/climate-learn/tutorial/res_slimvit_downscaling_u10/checkpoints/epoch_009.ckpt",
     net=model.net,
     optimizer=model.optimizer,
     lr_scheduler=None,
@@ -115,7 +115,7 @@ model = model.to(device)
 
 # Setup trainer
 pl.seed_everything(0)
-early_stopping = "train/mae:aggregate"
+early_stopping = "train/perceptual:aggregate"
 
 gpu_stats = DeviceStatsMonitor()
 
