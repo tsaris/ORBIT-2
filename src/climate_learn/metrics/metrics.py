@@ -105,6 +105,39 @@ class TransformedMetric:
         return self.metric(pred, target)
 
 
+
+@register("perceptual")
+class PERCEPTUAL(Metric):
+    """Computes perceptual loss."""
+
+    def __init__(self, device, aggregate_only: bool = False, metainfo: Optional[MetricsMetaInfo] = None):
+        self.loss_fn = lpips.LPIPS(net='vgg').to(device) # best forward scores
+
+        print("inside PERCEPTUAL","self.loss_fn",self.loss_fn,flush=True)
+
+        super().__init__(aggregate_only, metainfo)
+
+    def __call__(
+        self,
+        pred: Union[torch.FloatTensor, torch.DoubleTensor],
+        target: Union[torch.FloatTensor, torch.DoubleTensor],
+    ) -> Union[torch.FloatTensor, torch.DoubleTensor]:
+        r"""
+        .. highlight:: python
+
+        :param pred: The predicted values of shape [B,C,H,W].
+        :type pred: torch.FloatTensor|torch.DoubleTensor
+        :param target: The ground truth target values of shape [B,C,H,W].
+        :type target: torch.FloatTensor|torch.DoubleTensor
+
+        :rtype: torch.FloatTensor|torch.DoubleTensor
+        """
+        return perceptual(self.loss_fn,pred, target)
+
+
+
+
+
 @register("mse")
 class MSE(Metric):
     """Computes standard mean-squared error."""
