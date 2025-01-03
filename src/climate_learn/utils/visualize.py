@@ -97,7 +97,11 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, index
 
     print("ground truth yy.shape",yy.shape,"extent",extent,flush=True)
 
-    visualize_sample(yy, extent, f"Ground truth: {variable_with_units}")
+
+    yy_min = np.min(yy)
+    yy_max = np.max(yy)
+
+    visualize_sample(yy, extent, f"Ground truth: {variable_with_units}",vmin=yy_min,vmax=yy_max)
     plt.show()
     plt.savefig('groundtruth.png')
 
@@ -106,7 +110,7 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, index
     ppred = ppred[out_channel].detach().cpu().numpy()
     if src == "era5":
         ppred = np.flip(ppred, 0)
-    visualize_sample(ppred, extent, f"Prediction: {variable_with_units}")
+    visualize_sample(ppred, extent, f"Prediction: {variable_with_units}",vmin=yy_min,vmax=yy_max)
     plt.show()
     plt.savefig('prediction.png')
 
@@ -123,14 +127,18 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, index
     return anim
 
 
-def visualize_sample(img, extent, title):
+def visualize_sample(img, extent, title,vmin=-1,vmax=-1):
     fig, ax = plt.subplots()
     ax.set_title(title)
     ax.set_xlabel("Longitude")
     ax.set_ylabel("Latitude")
     cmap = plt.cm.coolwarm
     cmap.set_bad("black", 1)
-    ax.imshow(img, cmap=cmap, extent=extent)
+    if vmin!=-1 and vmax!=-1:
+        ax.imshow(img, cmap=cmap, extent=extent,vmin=vmin,vmax=vmax)
+    else:
+        ax.imshow(img, cmap=cmap, extent=extent)
+
     cax = fig.add_axes(
         [
             ax.get_position().x1 + 0.02,
