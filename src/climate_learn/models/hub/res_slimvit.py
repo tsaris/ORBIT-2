@@ -81,6 +81,7 @@ class Res_Slim_ViT(nn.Module):
 
         self.path1 = nn.Linear(self.img_size[1], self.img_size[1]*superres_factor*superres_factor)
 
+        self.out_linear = nn.Linear(self.img_size[1]*superres_factor, self.img_size[1]*superres_factor)
 
         self.head = nn.ModuleList()
         for _ in range(decoder_depth):

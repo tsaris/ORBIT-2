@@ -9,15 +9,25 @@ import torch
 import torch.nn.functional as F
 import lpips
 from einops import repeat
+import torchvision
 
 @handles_probabilistic
 def perceptual(
     loss_fn,
+    model,
     pred: Pred,
     target: Union[torch.FloatTensor, torch.DoubleTensor]
 ) -> Union[torch.FloatTensor, torch.DoubleTensor]:
 
-    error = loss_fn(pred, target) 
+#    print("loss_fn(pred,target).shape",temp.shape,"max",torch.max(temp),"min",torch.min(temp),flush=True)
+
+#    if torch.distributed.get_rank()==0:
+#        torchvision.utils.save_image(temp[0],'temp.png')
+
+
+    error = ((pred - target).abs() + torch.relu(model[0].out_linear(loss_fn(pred,target)))).mean()
+
+
     return error
 
 

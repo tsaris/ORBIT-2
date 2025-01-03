@@ -107,7 +107,7 @@ def load_model_module(
         print(f"Loading training loss: {train_loss}")
         clim = get_climatology(data_module, "train")
         metainfo = MetricsMetaInfo(in_vars, out_vars, lat, lon, clim)
-        train_loss = load_loss(device,train_loss, True, metainfo)
+        train_loss = load_loss(device,model, train_loss, True, metainfo)
     elif isinstance(train_loss, Callable):
         print("Using custom training loss")
     else:
@@ -133,7 +133,7 @@ def load_model_module(
             clim = get_climatology(data_module, "val")
             metainfo = MetricsMetaInfo(in_vars, out_vars, lat, lon, clim)
             print(f"Loading validation loss: {vl}")
-            val_losses.append(load_loss(device,vl, False, metainfo))
+            val_losses.append(load_loss(device,model, vl, False, metainfo))
         elif isinstance(vl, Callable):
             print("Using custom validation loss")
             val_losses.append(vl)
@@ -170,7 +170,7 @@ def load_model_module(
             clim = get_climatology(data_module, "test")
             metainfo = MetricsMetaInfo(in_vars, out_vars, lat, lon, clim)
             print(f"Loading test loss: {tl}")
-            test_losses.append(load_loss(device,tl, False, metainfo))
+            test_losses.append(load_loss(device,model, tl, False, metainfo))
         elif isinstance(tl, Callable):
             print("Using custom testing loss")
             test_losses.append(tl)
@@ -435,11 +435,11 @@ def load_lr_scheduler(
     return lr_scheduler
 
 
-def load_loss(device,loss_name, aggregate_only, metainfo):
+def load_loss(device,model, loss_name, aggregate_only, metainfo):
     loss_cls = METRICS_REGISTRY.get(loss_name, None)
 
     if loss_name=="perceptual":
-        loss = loss_cls(device,aggregate_only=aggregate_only, metainfo=metainfo)
+        loss = loss_cls(device,model, aggregate_only=aggregate_only, metainfo=metainfo)
         return loss
 
     if loss_cls is None:
