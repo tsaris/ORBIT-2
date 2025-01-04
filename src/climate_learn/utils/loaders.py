@@ -238,7 +238,7 @@ load_climatebench_module = partial(
 load_downscaling_module = partial(
     load_model_module,
     task="downscaling",
-    train_loss="perceptual",
+    train_loss="mse",
     val_loss=["rmse", "pearson", "mean_bias", "mae"],
     test_loss=["rmse", "pearson", "mean_bias"],
     train_target_transform=None,
