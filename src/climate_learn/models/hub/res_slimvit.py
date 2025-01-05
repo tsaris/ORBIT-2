@@ -91,15 +91,6 @@ class Res_Slim_ViT(nn.Module):
 
         self.to_img = nn.Linear(embed_dim, out_channels * patch_size**2)
 
-
-        #for perceptual loss weight
-        self.percep_wght = nn.ModuleList()
-        self.percep_wght.append(nn.GELU()) 
-        self.percep_wght.append(nn.Linear(self.img_size[1]*superres_factor, self.img_size[1]*superres_factor))
-        self.percep_wght = nn.Sequential(*self.percep_wght)
-
-
-        self.head = nn.ModuleList()
         for _ in range(decoder_depth):
             self.head.append(nn.Linear(self.img_size[1]*superres_factor, self.img_size[1]*superres_factor))
             self.head.append(nn.GELU())
