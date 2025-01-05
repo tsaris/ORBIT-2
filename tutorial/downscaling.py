@@ -79,10 +79,10 @@ variables = [
 #    "v_component_of_wind",
 ]
 out_var_dict = {
-#    "t2m": "2m_temperature",
+    "t2m": "2m_temperature",
 #    "z500": "geopotential_500",
 #    "t850": "temperature_850",
-     "u10": "10m_u_component_of_wind"
+#     "u10": "10m_u_component_of_wind"
 }
 in_vars = []
 for var in variables:
@@ -116,7 +116,7 @@ if world_rank==0:
 pl.seed_everything(0)
 default_root_dir = f"{args.preset}_downscaling_{args.variable}"
 logger = TensorBoardLogger(save_dir=f"{default_root_dir}/logs")
-early_stopping = "train/perceptual:aggregate"
+early_stopping = "train/mse:aggregate"
 
 gpu_stats = DeviceStatsMonitor()
 

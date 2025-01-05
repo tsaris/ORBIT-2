@@ -62,31 +62,40 @@ class Res_Slim_ViT(nn.Module):
         )
         self.norm = nn.LayerNorm(embed_dim)
 
-
+        #skip connection path
         self.path2 = nn.ModuleList()
         self.path2.append(nn.Conv2d(in_channels=in_channels, out_channels=cnn_ratio*superres_factor*superres_factor, kernel_size=(3, 3), stride=1, padding=1)) 
+        self.path2.append(nn.GELU())
+        self.path2.append(nn.BatchNorm2d(cnn_ratio*superres_factor*superres_factor))
+        self.path2.append(nn.Conv2d(in_channels=cnn_ratio*superres_factor*superres_factor, out_channels=cnn_ratio*superres_factor*superres_factor, kernel_size=(3, 3), stride=1, padding=1)) 
+        self.path2.append(nn.GELU())
+        self.path2.append(nn.BatchNorm2d(cnn_ratio*superres_factor*superres_factor))
         self.path2.append(nn.PixelShuffle(superres_factor))
         self.path2.append(nn.Conv2d(in_channels=cnn_ratio, out_channels=out_channels, kernel_size=(3, 3), stride=1, padding=1)) 
         self.path2 = nn.Sequential(*self.path2)
 
 
+        #vit path
+        self.path1 = nn.ModuleList()
+        self.path1.append(nn.Conv2d(in_channels=out_channels, out_channels=cnn_ratio*superres_factor*superres_factor, kernel_size=(3, 3), stride=1, padding=1)) 
+        self.path1.append(nn.GELU())
+        self.path1.append(nn.BatchNorm2d(cnn_ratio*superres_factor*superres_factor))
+        self.path1.append(nn.Conv2d(in_channels=cnn_ratio*superres_factor*superres_factor, out_channels=cnn_ratio*superres_factor*superres_factor, kernel_size=(3, 3), stride=1, padding=1)) 
+        self.path1.append(nn.GELU())
+        self.path1.append(nn.BatchNorm2d(cnn_ratio*superres_factor*superres_factor))
+
+        self.path1.append(nn.PixelShuffle(superres_factor))
+        self.path1.append(nn.Conv2d(in_channels=cnn_ratio, out_channels=out_channels, kernel_size=(3, 3), stride=1, padding=1)) 
+        self.path1 = nn.Sequential(*self.path1)
 
 
-
-#        self.path1 = nn.ModuleList()
-#        self.path1.append(nn.Conv2d(in_channels=out_channels, out_channels=cnn_ratio*superres_factor*superres_factor, kernel_size=(3, 3), stride=1, padding=1)) 
-#        self.path1.append(nn.PixelShuffle(superres_factor))
-#        self.path1.append(nn.Conv2d(in_channels=cnn_ratio, out_channels=out_channels, kernel_size=(3, 3), stride=1, padding=1)) 
-#        self.path1 = nn.Sequential(*self.path1)
-
-        self.path1 = nn.Linear(self.img_size[1], self.img_size[1]*superres_factor*superres_factor)
-
+        self.to_img = nn.Linear(embed_dim, out_channels * patch_size**2)
 
         self.head = nn.ModuleList()
         for _ in range(decoder_depth):
-            self.head.append(nn.Linear(embed_dim, embed_dim))
+            self.head.append(nn.Linear(self.img_size[1]*superres_factor, self.img_size[1]*superres_factor))
             self.head.append(nn.GELU())
-        self.head.append(nn.Linear(embed_dim, out_channels * patch_size**2))
+        self.head.append(nn.Linear(self.img_size[1]*superres_factor, self.img_size[1]*superres_factor))
         self.head = nn.Sequential(*self.head)
         self.initialize_weights()
 
@@ -147,18 +156,22 @@ class Res_Slim_ViT(nn.Module):
         # x.shape = [B,T*in_channels,H,W]
 
  
-        path2_result = x
+        path2_result = self.path2(x)
         
         x = self.forward_encoder(x)
 
         # x.shape = [B,num_patches,embed_dim]
-        x = self.head(x)
+        #x = self.head(x)
 
- 
-        # x.shape = [B,num_patches,embed_dim]
+
+        x = self.to_img(x) 
+        # x.shape = [B,num_patches,out_channels*patch_size*patch_size]
         x = self.unpatchify(x)
-    
-        preds = rearrange(self.path1(x),"b c h (w s1 s2) -> b c (h s1) (w s2)",s1= self.superres_factor,s2=self.superres_factor) + self.path2(path2_result)
- 
+        # x.shape = [B,num_patches,h*patch_size, w*patch_size]
+   
+        preds = self.path1(x) + path2_result
+
+        #decoder
+        preds = self.head(preds) 
         # preds.shape = [B,out_channels,H,W]
         return preds
