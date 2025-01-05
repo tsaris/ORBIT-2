@@ -111,7 +111,7 @@ class PERCEPTUAL(Metric):
     """Computes perceptual loss."""
 
     def __init__(self, device, model, aggregate_only: bool = False, metainfo: Optional[MetricsMetaInfo] = None):
-        self.loss_fn = lpips.LPIPS(net='vgg',spatial=True).to(device) # best forward scores
+        self.loss_fn = lpips.LPIPS(net='vgg').to(device) # best forward scores
         self.model = model
         print("inside PERCEPTUAL","self.loss_fn",self.loss_fn,flush=True)
 
