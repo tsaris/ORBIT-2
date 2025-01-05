@@ -62,7 +62,7 @@ class Res_Slim_ViT(nn.Module):
         )
         self.norm = nn.LayerNorm(embed_dim)
 
-
+        #skip connection path
         self.path2 = nn.ModuleList()
         self.path2.append(nn.Conv2d(in_channels=in_channels, out_channels=cnn_ratio*superres_factor*superres_factor, kernel_size=(3, 3), stride=1, padding=1)) 
         self.path2.append(nn.GELU())
@@ -75,7 +75,7 @@ class Res_Slim_ViT(nn.Module):
         self.path2 = nn.Sequential(*self.path2)
 
 
-
+        #vit path
         self.path1 = nn.ModuleList()
         self.path1.append(nn.Conv2d(in_channels=out_channels, out_channels=cnn_ratio*superres_factor*superres_factor, kernel_size=(3, 3), stride=1, padding=1)) 
         self.path1.append(nn.GELU())
@@ -89,22 +89,14 @@ class Res_Slim_ViT(nn.Module):
         self.path1 = nn.Sequential(*self.path1)
 
 
-
-
-#        self.path1 = nn.ModuleList()
-#        self.path1.append(nn.Conv2d(in_channels=out_channels, out_channels=cnn_ratio*superres_factor*superres_factor, kernel_size=(3, 3), stride=1, padding=1)) 
-#        self.path1.append(nn.PixelShuffle(superres_factor))
-#        self.path1.append(nn.Conv2d(in_channels=cnn_ratio, out_channels=out_channels, kernel_size=(3, 3), stride=1, padding=1)) 
-#        self.path1 = nn.Sequential(*self.path1)
-
         self.to_img = nn.Linear(embed_dim, out_channels * patch_size**2)
 
 
-
-#        self.out_conv = nn.ModuleList()
-#        self.out_conv.append(nn.GELU()) 
-#        self.out_conv.append(nn.Linear(self.img_size[1]*superres_factor, self.img_size[1]*superres_factor))
-#        self.out_conv = nn.Sequential(*self.out_conv)
+        #for perceptual loss weight
+        self.percep_wght = nn.ModuleList()
+        self.percep_wght.append(nn.GELU()) 
+        self.percep_wght.append(nn.Linear(self.img_size[1]*superres_factor, self.img_size[1]*superres_factor))
+        self.percep_wght = nn.Sequential(*self.percep_wght)
 
 
         self.head = nn.ModuleList()
@@ -187,6 +179,7 @@ class Res_Slim_ViT(nn.Module):
    
         preds = self.path1(x) + path2_result
 
+        #decoder
         preds = self.head(preds) 
         # preds.shape = [B,out_channels,H,W]
         return preds
