@@ -26,6 +26,7 @@ You can also request multiple nodes by changing `#SBATCH --nodes=1`  and set --n
 
 (5) To visualize the input and output, run launch_visualize.sh afterwards. Use only a single node with a single GPU. In visualize.py, do not forget to change the AI architecture choice and checkpoint path according to the training setup.
 
+(6) Available training losses include MSE, MAE, latitude weighted MSE, MAE, Pearson Score, Anomaly Coefficient. Most recently, hybrid perceptual loss is implemented.  Training loss can be changed in ./src/climate-learn/util/loader.py
 **Available Training Data**
 ERA5 5.6 degree "/lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg/" 
 ERA5 1.4 degree "/lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg/"
