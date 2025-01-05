@@ -79,10 +79,10 @@ variables = [
 #    "v_component_of_wind",
 ]
 out_var_dict = {
-#    "t2m": "2m_temperature",
+    "t2m": "2m_temperature",
 #    "z500": "geopotential_500",
 #    "t850": "temperature_850",
-     "u10": "10m_u_component_of_wind"
+#     "u10": "10m_u_component_of_wind"
 }
 in_vars = []
 for var in variables:
