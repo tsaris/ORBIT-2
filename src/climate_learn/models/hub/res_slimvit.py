@@ -91,6 +91,7 @@ class Res_Slim_ViT(nn.Module):
 
         self.to_img = nn.Linear(embed_dim, out_channels * patch_size**2)
 
+        self.head = nn.ModuleList()
         for _ in range(decoder_depth):
             self.head.append(nn.Linear(self.img_size[1]*superres_factor, self.img_size[1]*superres_factor))
             self.head.append(nn.GELU())
