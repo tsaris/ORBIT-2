@@ -105,7 +105,7 @@ def main(device):
     if world_rank==0:
         print("in_vars",in_vars,flush=True)
 
-
+    #load data module
     dm = cl.data.IterDataModule(
         "downscaling",
         args.era5_low_res_dir,
@@ -177,6 +177,9 @@ def main(device):
     apply_activation_checkpointing(
         model, checkpoint_wrapper_fn=checkpoint_wrapper, check_fn=check_fn
     )
+
+    optimizer, scheduler = model.configure_optimizers()
+
 
 
 if __name__ == "__main__":
