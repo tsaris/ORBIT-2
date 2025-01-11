@@ -3,10 +3,14 @@ from argparse import ArgumentParser
 import os
 import torch
 import functools
-from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp.wrap import wrap, transformer_auto_wrap_policy
+from torch.cuda.amp.grad_scaler import GradScaler
 import torch.distributed as dist
 from datetime import timedelta
 import sys
+import random
+import numpy as np
 
 # Third party
 import climate_learn as cl
@@ -21,6 +25,17 @@ from climate_learn.models.hub.components.cnn_blocks import (
     UpBlock,
     ResidualBlock
 )
+
+
+def seed_everything(seed):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+
 
 def main(device):
 
@@ -100,6 +115,47 @@ def main(device):
 
     # Set up deep learning model
     model = cl.load_downscaling_module(device,data_module=dm, architecture=args.preset)
+
+    seed_everything(0)
+    default_root_dir = f"{args.preset}_downscaling_{args.variable}"
+
+    if args.preset =="vit" or args.preset=="res_slimvit":
+   
+        auto_wrap_policy = functools.partial(
+            transformer_auto_wrap_policy,
+            transformer_layer_cls={
+                Block  # < ---- Your Transformer layer class
+            },
+        )
+
+        check_fn = lambda submodule: isinstance(submodule, Block)
+
+
+
+    elif args.preset =="unet":
+        auto_wrap_policy = functools.partial(
+            transformer_auto_wrap_policy,
+            transformer_layer_cls={
+                UpBlock,DownBlock,MiddleBlock  # < ---- Your Transformer layer class
+            },
+        )
+
+        check_fn = lambda submodule: isinstance(submodule, UpBlock) or isinstance(submodule, DownBlock) or isinstance(submodule, MiddleBlock)
+
+
+
+    else: #resnet
+        auto_wrap_policy = functools.partial(
+            transformer_auto_wrap_policy,
+            transformer_layer_cls={
+                ResidualBlock  # < ---- Your Transformer layer class
+            },
+        )
+        check_fn = lambda submodule: isinstance(submodule, ResidualBlock)
+
+
+
+
 
 
 
