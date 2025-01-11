@@ -106,7 +106,7 @@ def main(device):
         print("in_vars",in_vars,flush=True)
 
     #load data module
-    dm = cl.data.IterDataModule(
+    data_module = cl.data.IterDataModule(
         "downscaling",
         args.era5_low_res_dir,
         args.era5_high_res_dir,
@@ -117,10 +117,10 @@ def main(device):
         buffer_size=500,
         num_workers=1,
     )
-    dm.setup()
+    data_module.setup()
 
     # Set up deep learning model
-    model = cl.load_downscaling_module(device,data_module=dm, architecture=args.preset)
+    model = cl.load_downscaling_module(device,data_module=data_module, architecture=args.preset)
 
     seed_everything(0)
     default_root_dir = f"{args.preset}_downscaling_{args.variable}"
@@ -178,7 +178,19 @@ def main(device):
         model, checkpoint_wrapper_fn=checkpoint_wrapper, check_fn=check_fn
     )
 
+    #load optimzier and scheduler
     optimizer, scheduler = model.configure_optimizers()
+
+    #get latitude and longitude
+    lat, lon = data_module.get_lat_lon()
+
+    # get train data loader
+    train_dataloader = data_module.train_dataloader()
+
+    #set up gradient scaler
+    scaler = GradScaler(init_scale=8192, growth_interval=100)
+
+    min_scale= 128
 
 
 

@@ -55,6 +55,8 @@ class IterDataModule(torch.nn.Module):
         self.buffer_size = buffer_size
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.pin_memory = pin_memory
+
         if task in ("direct-forecasting", "iterative-forecasting"):
             self.dataset_caller = DirectForecast
             self.dataset_arg = {
