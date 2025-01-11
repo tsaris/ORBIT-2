@@ -8,10 +8,9 @@ from ..data.processing.era5_constants import CONSTANTS
 import torch
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import _LRScheduler as LRScheduler
-import pytorch_lightning as pl
 
 
-class LitModule(pl.LightningModule):
+class LitModule(torch.nn.Module):
     def __init__(
         self,
         net: torch.nn.Module,
