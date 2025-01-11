@@ -85,6 +85,24 @@ def main(device):
         print("in_vars",in_vars,flush=True)
 
 
+    dm = cl.data.IterDataModule(
+        "downscaling",
+        args.era5_low_res_dir,
+        args.era5_high_res_dir,
+        in_vars,
+        out_vars=[out_var_dict[args.variable]],
+        subsample=1,
+        batch_size=32,
+        buffer_size=500,
+        num_workers=1,
+    )
+    dm.setup()
+
+    # Set up deep learning model
+    model = cl.load_downscaling_module(device,data_module=dm, architecture=args.preset)
+
+
+
 if __name__ == "__main__":
 
     os.environ['MASTER_ADDR'] = str(os.environ['HOSTNAME'])
