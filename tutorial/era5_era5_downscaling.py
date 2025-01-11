@@ -11,6 +11,12 @@ from datetime import timedelta
 import sys
 import random
 import numpy as np
+from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
+   checkpoint_wrapper,
+   CheckpointImpl,
+   apply_activation_checkpointing,
+)
+from torch.distributed.fsdp import MixedPrecision
 
 # Third party
 import climate_learn as cl
@@ -41,7 +47,7 @@ def main(device):
 
     world_size = int(os.environ['SLURM_NTASKS'])
     world_rank = dist.get_rank()
-
+    local_rank = int(os.environ['SLURM_LOCALID'])
 
 
     if world_rank==0:
@@ -155,8 +161,22 @@ def main(device):
 
 
 
+    #bfloat16 policy
+    bfloatPolicy = MixedPrecision(
+        param_dtype=torch.bfloat16,
+        # Gradient communication precision.
+        reduce_dtype=torch.bfloat16,
+        # Buffer precision.
+        buffer_dtype=torch.bfloat16,
+    )
 
+    #fully sharded FSDP
+    model = FSDP(model, device_id=local_rank, process_group= None, sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.FULL_SHARD, auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False )
 
+    #activation checkpointing
+    apply_activation_checkpointing(
+        model, checkpoint_wrapper_fn=checkpoint_wrapper, check_fn=check_fn
+    )
 
 
 if __name__ == "__main__":
