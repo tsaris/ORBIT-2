@@ -7,16 +7,18 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp.wrap import wrap, transformer_auto_wrap_policy
 from torch.cuda.amp.grad_scaler import GradScaler
 import torch.distributed as dist
-from datetime import timedelta
-import sys
-import random
-import numpy as np
 from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
    checkpoint_wrapper,
    CheckpointImpl,
    apply_activation_checkpointing,
 )
 from torch.distributed.fsdp import MixedPrecision
+from torch.nn.parallel import DistributedDataParallel as DDP
+from datetime import timedelta
+import sys
+import random
+import time
+import numpy as np
 
 # Third party
 import climate_learn as cl
@@ -119,8 +121,10 @@ def main(device):
     )
     data_module.setup()
 
+    data_module = data_module.to(device)
     # Set up deep learning model
     model = cl.load_downscaling_module(device,data_module=data_module, architecture=args.preset)
+    model = model.to(device)
 
     seed_everything(0)
     default_root_dir = f"{args.preset}_downscaling_{args.variable}"
@@ -171,7 +175,10 @@ def main(device):
     )
 
     #fully sharded FSDP
-    model = FSDP(model, device_id=local_rank, process_group= None, sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.FULL_SHARD, auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False )
+    #model = FSDP(model, device_id=local_rank, process_group= None, sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.FULL_SHARD, auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False )
+
+
+    model = DDP(model, device_ids=[local_rank], output_device=[local_rank]) 
 
     #activation checkpointing
     apply_activation_checkpointing(
@@ -179,7 +186,7 @@ def main(device):
     )
 
     #load optimzier and scheduler
-    optimizer, scheduler = model.configure_optimizers()
+    optimizer, scheduler = model.module.configure_optimizers()
 
     #get latitude and longitude
     lat, lon = data_module.get_lat_lon()
@@ -191,6 +198,55 @@ def main(device):
     scaler = GradScaler(init_scale=8192, growth_interval=100)
 
     min_scale= 128
+
+
+    for epoch in range(0,args.max_epochs):
+    
+        #tell the model that we are in train mode. Matters because we have the dropout
+        model.module.train()
+        loss = 0.0
+        epoch_loss = torch.tensor(0.0 , dtype=torch.float32, device=device)
+        if world_rank==0:
+            print("epoch ",epoch,flush=True)
+    
+        for batch_idx, batch in enumerate(train_dataloader):
+
+            if world_rank==0:
+                print("len(batch)",len(batch),"batch[0].shape",batch[0].shape,"batch[1].shape",batch[1].shape,"cuda?",batch[0].is_cuda,flush=True)
+                torch.cuda.synchronize(device=device)
+                tic1 = time.perf_counter() 
+
+            loss = model.module.training_step(batch, batch_idx,device)
+
+            epoch_loss += loss.detach()
+    
+            if world_rank==0:
+                print("epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," loss ",loss,flush=True)
+    
+            optimizer.zero_grad()
+            scaler.scale(loss).backward()
+
+            scaler.step(optimizer)
+    
+            scaler.update()
+   
+            if scaler._scale <min_scale:
+                scaler._scale = torch.tensor(min_scale).to(scaler._scale)
+    
+            if world_rank==0:
+                print("rank",world_rank,"batch_idx",batch_idx,"get_lr ",scheduler.get_lr(),"after optimizer step torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
+
+
+            if world_rank==0:
+                torch.cuda.synchronize(device=device)
+                tic4 = time.perf_counter() 
+                print(f"my rank {dist.get_rank()}. tic4-tic1 in {(tic4-tic1):0.4f} seconds\n",flush=True)
+    
+
+            scheduler.step()
+    
+        if world_rank==0:
+            print("epoch: ",epoch," epoch_loss ",epoch_loss,flush=True)
 
 
 
