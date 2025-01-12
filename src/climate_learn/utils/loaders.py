@@ -56,6 +56,8 @@ def load_model_module(
         model, optimizer, lr_scheduler = load_architecture(
             task, data_module, architecture
         )
+
+
     elif isinstance(model, str):
         print(f"Loading model: {model}")
         model_cls = MODEL_REGISTRY.get(model, None)
@@ -198,6 +200,7 @@ def load_model_module(
             "'test_target_transform' must be an iterable of strings/callables,"
             " or None"
         )
+
     # Instantiate Lightning Module
     model_module = LitModule(
         model,
@@ -376,16 +379,18 @@ def load_architecture(task, data_module, architecture):
             optimizer = load_optimizer(
                 model, "adamw", {"lr": 1e-4, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
             )
+
             lr_scheduler = load_lr_scheduler(
                 "linear-warmup-cosine-annealing",
                 optimizer,
                 {
-                    "warmup_epochs": 2,
-                    "max_epochs": 50,
+                    "warmup_epochs": 1000,   #it's actually steps, not epochs. Using the same name convention as LRScheduler
+                    "max_epochs": 10000,
                     "warmup_start_lr": 1e-8,
                     "eta_min": 1e-8,
                 },
             )
+
     return model, optimizer, lr_scheduler
 
 
