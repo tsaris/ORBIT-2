@@ -69,9 +69,13 @@ class LitModule(torch.nn.Module):
         self,
         batch: Tuple[torch.Tensor, torch.Tensor, List[str], List[str]],
         batch_idx: int,
+        device: int
     ) -> torch.Tensor:
         x, y, in_variables, out_variables = batch
-        yhat = self(x).to(device=y.device)
+        x = x.to(device)
+        y = y.to(device)
+        
+        yhat = self(x)
         yhat = self.replace_constant(y, yhat, out_variables)
         if self.train_target_transform:
             yhat = self.train_target_transform(yhat)
@@ -81,43 +85,39 @@ class LitModule(torch.nn.Module):
         loss_dict = {}
         if losses.dim() == 0:  # aggregate loss only
             loss = losses
-            loss_dict[f"train/{loss_name}:aggregate"] = loss
         else:  # per channel + aggregate
-            for var_name, loss in zip(out_variables, losses):
-                loss_dict[f"train/{loss_name}:{var_name}"] = loss
             loss = losses[-1]
-            loss_dict[f"train/{loss_name}:aggregate"] = loss
-        self.log_dict(
-            loss_dict,
-            prog_bar=True,
-            on_step=True,
-            on_epoch=False,
-            batch_size=x.shape[0],
-        )
+        
         return loss
 
     def validation_step(
         self,
         batch: Tuple[torch.Tensor, torch.Tensor, List[str], List[str]],
         batch_idx: int,
+        device: int
     ) -> torch.Tensor:
-        self.evaluate(batch, "val")
+        self.evaluate(batch, "val",device)
 
     def test_step(
         self,
         batch: Tuple[torch.Tensor, torch.Tensor, List[str], List[str]],
         batch_idx: int,
+        device: int
     ) -> torch.Tensor:
         if self.mode == "direct":
-            self.evaluate(batch, "test")
+            self.evaluate(batch, "test",device)
         if self.mode == "iter":
-            self.evaluate_iter(batch, self.n_iters, "test")
+            self.evaluate_iter(batch, self.n_iters, "test",device)
 
     def evaluate(
-        self, batch: Tuple[torch.Tensor, torch.Tensor, List[str], List[str]], stage: str
+        self, batch: Tuple[torch.Tensor, torch.Tensor, List[str], List[str]], stage: str, device: int
     ):
         x, y, in_variables, out_variables = batch
-        yhat = self(x).to(device=y.device)
+
+        x = x.to(device)
+        y = y.to(device)
+ 
+        yhat = self(x)
         yhat = self.replace_constant(y, yhat, out_variables)
         if stage == "val":
             loss_fns = self.val_loss
@@ -141,13 +141,6 @@ class LitModule(torch.nn.Module):
                     name = f"{stage}/{loss_name}:{var_name}"
                     loss_dict[name] = loss
                 loss_dict[f"{stage}/{loss_name}:aggregate"] = losses[-1]
-        self.log_dict(
-            loss_dict,
-            on_step=False,
-            on_epoch=True,
-            sync_dist=True,
-            batch_size=len(batch[0]),
-        )
         return loss_dict
 
     def evaluate_iter(
@@ -155,12 +148,15 @@ class LitModule(torch.nn.Module):
         batch: Tuple[torch.Tensor, torch.Tensor, List[str], List[str]],
         n_iters: int,
         stage: str,
+        device: int
     ):
         x, y, in_variables, out_variables = batch
-
+        x = x.to(device)
+        y = y.to(device)
+ 
         x_iter = x
         for _ in range(n_iters):
-            yhat_iter = self(x_iter).to(device=x_iter.device)
+            yhat_iter = self(x_iter)
             yhat_iter = self.replace_constant(y, yhat_iter, out_variables)
             x_iter = x_iter[:, 1:]
             x_iter = torch.cat((x_iter, yhat_iter.unsqueeze(1)), dim=1)
@@ -191,13 +187,6 @@ class LitModule(torch.nn.Module):
                     name = f"{stage}/{loss_name}:{var_name}"
                     loss_dict[name] = loss
                 loss_dict[f"{stage}/{loss_name}:aggregate"] = losses[-1]
-        self.log_dict(
-            loss_dict,
-            on_step=False,
-            on_epoch=True,
-            sync_dist=True,
-            batch_size=len(batch[0]),
-        )
         return loss_dict
 
     def configure_optimizers(self):
@@ -213,4 +202,4 @@ class LitModule(torch.nn.Module):
             }
         else:
             scheduler = self.lr_scheduler
-        return {"optimizer": self.optimizer, "lr_scheduler": scheduler}
+        return self.optimizer, scheduler
