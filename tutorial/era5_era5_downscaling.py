@@ -195,9 +195,9 @@ def main(device):
     train_dataloader = data_module.train_dataloader()
 
     #set up gradient scaler
-    scaler = GradScaler(init_scale=8192, growth_interval=100)
+    #scaler = GradScaler(init_scale=8192, growth_interval=100)
 
-    min_scale= 128
+    #min_scale= 128
 
 
     for epoch in range(0,args.max_epochs):
@@ -224,14 +224,17 @@ def main(device):
                 print("epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," loss ",loss,flush=True)
     
             optimizer.zero_grad()
-            scaler.scale(loss).backward()
+            loss.backward()
+            optimizer.step()
+           
+            #scaler.scale(loss).backward()
 
-            scaler.step(optimizer)
+            #scaler.step(optimizer)
     
-            scaler.update()
+            #scaler.update()
    
-            if scaler._scale <min_scale:
-                scaler._scale = torch.tensor(min_scale).to(scaler._scale)
+            #if scaler._scale <min_scale:
+            #    scaler._scale = torch.tensor(min_scale).to(scaler._scale)
     
             if world_rank==0:
                 print("rank",world_rank,"batch_idx",batch_idx,"get_lr ",scheduler.get_lr(),"after optimizer step torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
