@@ -377,7 +377,7 @@ def load_architecture(task, data_module, architecture):
                 )
 
             optimizer = load_optimizer(
-                model, "adamw", {"lr": 1e-4, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
+                model, "adamw", {"lr": 6e-5, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
             )
 
             lr_scheduler = load_lr_scheduler(
