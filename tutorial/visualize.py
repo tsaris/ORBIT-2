@@ -59,10 +59,10 @@ variables = [
 #    "v_component_of_wind",
 ]
 out_var_dict = {
-#    "t2m": "2m_temperature",
+    "t2m": "2m_temperature",
 #    "z500": "geopotential_500",
 #    "t850": "temperature_850",
-     "u10": "10m_u_component_of_wind"
+#     "u10": "10m_u_component_of_wind"
 
 }
 in_vars = []
@@ -79,7 +79,7 @@ dm = cl.data.IterDataModule(
     "/lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg", 
     "/lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg",
     in_vars,
-    out_vars=[out_var_dict["u10"]],
+    out_vars=[out_var_dict["t2m"]],
     subsample=1,
     batch_size=32,
     buffer_size=500,
@@ -148,7 +148,7 @@ cl.utils.visualize.visualize_at_index(
     dm,
     in_transform=denorm,
     out_transform=denorm,
-    variable="10m_u_component_of_wind",
+    variable="2m_temperature",
     src="era5",
     index=0  # visualize the first sample of the test set
 )
