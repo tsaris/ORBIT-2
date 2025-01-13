@@ -212,7 +212,6 @@ def main(device):
         for batch_idx, batch in enumerate(train_dataloader):
 
             if world_rank==0:
-                print("len(batch)",len(batch),"batch[0].shape",batch[0].shape,"batch[1].shape",batch[1].shape,"cuda?",batch[0].is_cuda,flush=True)
                 torch.cuda.synchronize(device=device)
                 tic1 = time.perf_counter() 
 
@@ -246,7 +245,7 @@ def main(device):
                 print(f"my rank {dist.get_rank()}. tic4-tic1 in {(tic4-tic1):0.4f} seconds\n",flush=True)
     
 
-            scheduler.step()
+        scheduler.step()
     
         if world_rank==0:
             print("epoch: ",epoch," epoch_loss ",epoch_loss,flush=True)

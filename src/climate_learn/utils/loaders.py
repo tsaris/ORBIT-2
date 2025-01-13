@@ -384,7 +384,7 @@ def load_architecture(task, data_module, architecture):
                 "linear-warmup-cosine-annealing",
                 optimizer,
                 {
-                    "warmup_epochs": 2,   #it's actually steps, not epochs. Using the same name convention as LRScheduler
+                    "warmup_epochs": 2,  
                     "max_epochs": 50,
                     "warmup_start_lr": 1e-8,
                     "eta_min": 1e-8,
