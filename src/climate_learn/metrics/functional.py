@@ -30,6 +30,29 @@ def perceptual(
 
     return error
 
+@handles_probabilistic
+def lat_weighted_quantile(
+        pred: Pred, 
+        target: Union[torch.FloatTensor, torch.DoubleTensor],
+        aggregate_only: bool = False,
+        lat_weights: Optional[Union[torch.FloatTensor, torch.DoubleTensor]] = None, 
+    ) -> Union[torch.FloatTensor, torch.DoubleTensor]:
+    """ Latitude weighted quantile loss """
+
+    # -3s to 3s
+    QUANTILES = [1 - 0.9987, 1 - 0.9772, 1 - 0.8413, 0.5000, 0.8413, 0.9772, 0.9987]
+    #QUANTILES_LABELS = ["-3s", "-2s", "-1s", "0s", "+1s", "+2s", "+3s"]
+    quantiles_tensor = torch.tensor(QUANTILES, device=pred.device)
+
+    error = pred -  target # [N, C, H, W]
+    # latitude weights
+    if lat_weights is not None:
+        error = error * lat_weights
+    error = error.unsqueeze(-1).expand(-1, -1, -1, -1, len(QUANTILES))
+    losses = torch.max((quantiles_tensor - 1) * error, quantiles_tensor * error) # (B, V, H, W, Q)
+    loss = torch.abs(losses).mean() 
+    return loss
+
 
 @handles_probabilistic
 def mse(
