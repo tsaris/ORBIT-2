@@ -9,4 +9,3 @@ from .utils.loaders import (
     load_loss,
     load_transform,
 )
-from .models import LitModule

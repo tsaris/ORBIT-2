@@ -5,7 +5,7 @@ import warnings
 
 # Local application
 from ..data import IterDataModule
-from ..models import LitModule, MODEL_REGISTRY
+from ..models import MODEL_REGISTRY
 from ..models.hub import (
     Climatology,
     Interpolation,
@@ -202,18 +202,18 @@ def load_model_module(
         )
 
     # Instantiate Lightning Module
-    model_module = LitModule(
-        model,
-        optimizer,
-        lr_scheduler,
-        train_loss,
-        val_losses,
-        test_losses,
-        train_transform,
-        val_transforms,
-        test_transforms,
-    )
-    return model_module
+    #model_module = LitModule(
+    #    model,
+    #    optimizer,
+    #    lr_scheduler,
+    #    train_loss,
+    #    val_losses,
+    #    test_losses,
+    #    train_transform,
+    #    val_transforms,
+    #    test_transforms,
+    #)
+    return model, optimizer, lr_scheduler,train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms
 
 
 load_forecasting_module = partial(
@@ -377,7 +377,7 @@ def load_architecture(task, data_module, architecture):
                 )
 
             optimizer = load_optimizer(
-                model, "adamw", {"lr": 6e-5, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
+                model, "adamw", {"lr": 1e-4, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
             )
 
             lr_scheduler = load_lr_scheduler(
