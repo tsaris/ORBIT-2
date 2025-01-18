@@ -167,6 +167,8 @@ def main(device):
     seed_everything(0)
     default_root_dir = f"{args.preset}_downscaling_{args.variable}"
 
+
+    #set up layer wrapping
     if args.preset =="vit" or args.preset=="res_slimvit":
    
         auto_wrap_policy = functools.partial(
@@ -219,11 +221,6 @@ def main(device):
     model = FSDP(model, device_id = local_rank, process_group= None,sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.FULL_SHARD,auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False)
 
 
-#    model = FSDP(model, device_id=local_rank, process_group= None, sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.FULL_SHARD, auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False )
-
-#unsharded FSDP
-    #model = FSDP(model, device_id=local_rank, process_group= None, sharding_strategy=dist.fsdp.ShardingStrategy.NO_SHARD)
-
 
     #model = DDP(model, device_ids=[local_rank], output_device=[local_rank]) 
 
@@ -263,12 +260,6 @@ def main(device):
     # get train data loader
     train_dataloader = data_module.train_dataloader()
 
-    #set up gradient scaler
-    #scaler = GradScaler(init_scale=8192, growth_interval=100)
-
-    #min_scale= 128
-
-    #scaler = ShardedGradScaler(init_scale=8192, growth_interval=100,process_group = dist.group.WORLD)
 
 
 
@@ -302,16 +293,6 @@ def main(device):
             loss.backward()
             optimizer.step()
 
-
-            #scaler.scale(loss).backward()
-
-            #scaler.step(optimizer)
-    
-            #scaler.update()
-  
-            #if scaler._scale <min_scale:
-            #    scaler._scale = torch.tensor(min_scale).to(scaler._scale)
- 
     
             if world_rank==0:
                 print("rank",world_rank,"batch_idx",batch_idx,"get_lr ",scheduler.get_lr(),"after optimizer step torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
@@ -328,6 +309,40 @@ def main(device):
         if world_rank==0:
             print("epoch: ",epoch," epoch_loss ",epoch_loss,flush=True)
 
+
+
+        if world_rank ==0:    
+            checkpoint_path = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate" 
+            # Check whether the specified checkpointing path exists or not
+            isExist = os.path.exists(checkpoint_path)
+            if not isExist:
+                # Create a new directory because it does not exist
+                os.makedirs(checkpoint_path)
+                print("The new checkpoint directory is created!")        
+
+
+        print("rank",world_rank,"Before torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
+
+
+        model_states = model.state_dict()
+        optimizer_states = optimizer.state_dict()
+        scheduler_states = scheduler.state_dict()
+
+        if world_rank == 0 :
+     
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model_states,
+                'optimizer_state_dict': optimizer_states,
+                'scheduler_state_dict': scheduler_states,
+                }, checkpoint_path+"/"+"ERA5"+"_rank_"+str(world_rank)+"_epoch_"+ str(epoch) +".ckpt")
+     
+        print("rank",world_rank,"After torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
+
+        dist.barrier()
+        del model_states
+        del optimizer_states
+        del scheduler_states
 
 
 if __name__ == "__main__":
