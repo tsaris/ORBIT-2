@@ -1,4 +1,5 @@
 # Standard library
+
 from typing import Any, Callable, Dict, Iterable, Optional, Union
 from functools import partial
 import warnings
@@ -53,7 +54,7 @@ def load_model_module(
         raise RuntimeError("Please specify 'architecture' or 'model'")
     elif architecture:
         print(f"Loading architecture: {architecture}")
-        model, optimizer, lr_scheduler = load_architecture(
+        model  = load_architecture(
             task, data_module, architecture
         )
 
@@ -213,7 +214,7 @@ def load_model_module(
     #    val_transforms,
     #    test_transforms,
     #)
-    return model, optimizer, lr_scheduler,train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms
+    return model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms
 
 
 load_forecasting_module = partial(
@@ -368,30 +369,14 @@ def load_architecture(task, data_module, architecture):
                 raise_not_impl()
 
             if architecture == "res_slimvit":
-                model = nn.Sequential(
-                    backbone
-                )
+                model = backbone
+                
             else:
                 model = nn.Sequential(
                     Interpolation((out_height, out_width), "bilinear"), backbone
                 )
 
-            optimizer = load_optimizer(
-                model, "adamw", {"lr": 1e-4, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
-            )
-
-            lr_scheduler = load_lr_scheduler(
-                "linear-warmup-cosine-annealing",
-                optimizer,
-                {
-                    "warmup_epochs": 2,  
-                    "max_epochs": 50,
-                    "warmup_start_lr": 1e-8,
-                    "eta_min": 1e-8,
-                },
-            )
-
-    return model, optimizer, lr_scheduler
+    return model
 
 
 def load_optimizer(net: torch.nn.Module, optim: str, optim_kwargs: Dict[str, Any] = {}):

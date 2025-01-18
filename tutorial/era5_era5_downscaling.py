@@ -13,6 +13,7 @@ from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
    apply_activation_checkpointing,
 )
 from torch.distributed.fsdp import MixedPrecision
+from torch.distributed.fsdp.sharded_grad_scaler import ShardedGradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from datetime import timedelta
 import sys
@@ -25,6 +26,7 @@ import climate_learn as cl
 from climate_learn.data.processing.era5_constants import (
     PRESSURE_LEVEL_VARS,
     DEFAULT_PRESSURE_LEVELS,
+    CONSTANTS
 )
 from timm.models.vision_transformer import Block
 from climate_learn.models.hub.components.cnn_blocks import (
@@ -33,6 +35,40 @@ from climate_learn.models.hub.components.cnn_blocks import (
     UpBlock,
     ResidualBlock
 )
+
+
+
+
+
+def replace_constant(y, yhat, out_variables):
+    for i in range(yhat.shape[1]):
+        # if constant replace with ground-truth value
+        if out_variables[i] in CONSTANTS:
+            yhat[:, i] = y[:, i]
+    return yhat
+
+
+def training_step(
+    batch,
+    batch_idx,
+    net,
+    device: int,
+    train_loss) -> torch.Tensor:
+    x, y, in_variables, out_variables = batch
+    x = x.to(device)
+    y = y.to(device)
+        
+    yhat = net.forward(x)
+    yhat = replace_constant(y, yhat, out_variables)
+    losses = train_loss(yhat, y)
+    loss_name = getattr(train_loss, "name", "loss")
+    if losses.dim() == 0:  # aggregate loss only
+        loss = losses
+    else:  # per channel + aggregate
+        loss = losses[-1]
+        
+    return loss
+
 
 
 def seed_everything(seed):
@@ -52,8 +88,7 @@ def main(device):
     local_rank = int(os.environ['SLURM_LOCALID'])
 
 
-    if world_rank==0:
-        print("world_size",world_size,"world_rank",world_rank,flush=True)
+    print("world_size",world_size,"world_rank",world_rank,"local_rank",local_rank,flush=True)
 
 
     parser = ArgumentParser()
@@ -118,12 +153,15 @@ def main(device):
         batch_size=32,
         buffer_size=500,
         num_workers=1,
-    )
+    ).to(device)
     data_module.setup()
 
-    data_module = data_module.to(device)
     # Set up deep learning model
-    model = cl.load_downscaling_module(device,data_module=data_module, architecture=args.preset)
+    model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms = cl.load_downscaling_module(device,data_module=data_module, architecture=args.preset)
+  
+    if dist.get_rank()==0:
+        print("train_loss",train_loss,"train_transform",train_transform,flush=True)
+ 
     model = model.to(device)
 
     seed_everything(0)
@@ -134,7 +172,7 @@ def main(device):
         auto_wrap_policy = functools.partial(
             transformer_auto_wrap_policy,
             transformer_layer_cls={
-                Block  # < ---- Your Transformer layer class
+                Block # < ---- Your Transformer layer class
             },
         )
 
@@ -174,19 +212,50 @@ def main(device):
         buffer_dtype=torch.bfloat16,
     )
 
+
+
     #fully sharded FSDP
-    #model = FSDP(model, device_id=local_rank, process_group= None, sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.FULL_SHARD, auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False )
+
+    model = FSDP(model, device_id = local_rank, process_group= None,sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.FULL_SHARD,auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False)
 
 
-    model = DDP(model, device_ids=[local_rank], output_device=[local_rank]) 
+#    model = FSDP(model, device_id=local_rank, process_group= None, sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.FULL_SHARD, auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False )
+
+#unsharded FSDP
+    #model = FSDP(model, device_id=local_rank, process_group= None, sharding_strategy=dist.fsdp.ShardingStrategy.NO_SHARD)
+
+
+    #model = DDP(model, device_ids=[local_rank], output_device=[local_rank]) 
 
     #activation checkpointing
     apply_activation_checkpointing(
         model, checkpoint_wrapper_fn=checkpoint_wrapper, check_fn=check_fn
     )
 
+
+    if torch.distributed.get_rank()==0:
+        print("model is ",model,flush=True)
+
+
+
+
     #load optimzier and scheduler
-    optimizer, scheduler = model.module.configure_optimizers()
+
+
+    optimizer = cl.load_optimizer(
+	model, "adamw", {"lr": 1e-4, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
+    )
+
+    scheduler = cl.load_lr_scheduler(
+	"linear-warmup-cosine-annealing",
+	optimizer,
+	{
+	    "warmup_epochs": 2,  
+	    "max_epochs": 50,
+	    "warmup_start_lr": 1e-8,
+	    "eta_min": 1e-8,
+	},
+    )
 
     #get latitude and longitude
     lat, lon = data_module.get_lat_lon()
@@ -199,11 +268,14 @@ def main(device):
 
     #min_scale= 128
 
+    #scaler = ShardedGradScaler(init_scale=8192, growth_interval=100,process_group = dist.group.WORLD)
+
+
 
     for epoch in range(0,args.max_epochs):
     
         #tell the model that we are in train mode. Matters because we have the dropout
-        model.module.train()
+        model.train()
         loss = 0.0
         epoch_loss = torch.tensor(0.0 , dtype=torch.float32, device=device)
         if world_rank==0:
@@ -215,7 +287,7 @@ def main(device):
                 torch.cuda.synchronize(device=device)
                 tic1 = time.perf_counter() 
 
-            loss = model.module.training_step(batch, batch_idx,device)
+            loss = training_step(batch, batch_idx,model,device,train_loss)
 
             epoch_loss += loss.detach()
     
@@ -223,17 +295,23 @@ def main(device):
                 print("epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," loss ",loss,flush=True)
     
             optimizer.zero_grad()
+            
+           
+
+
             loss.backward()
             optimizer.step()
-           
+
+
             #scaler.scale(loss).backward()
 
             #scaler.step(optimizer)
     
             #scaler.update()
-   
+  
             #if scaler._scale <min_scale:
             #    scaler._scale = torch.tensor(min_scale).to(scaler._scale)
+ 
     
             if world_rank==0:
                 print("rank",world_rank,"batch_idx",batch_idx,"get_lr ",scheduler.get_lr(),"after optimizer step torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
