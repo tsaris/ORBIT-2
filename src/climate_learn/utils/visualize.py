@@ -7,17 +7,16 @@ from ..data.processing.era5_constants import VAR_TO_UNIT as ERA5_VAR_TO_UNIT
 from ..data.processing.cmip6_constants import VAR_TO_UNIT as CMIP6_VAR_TO_UNIT
 
 
-def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, index=0):
+def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, device, index=0):
     print("reach here",flush=True)
 
     lat, lon = dm.get_lat_lon()
     extent = [lon.min(), lon.max(), lat.min(), lat.max()]
-    out_channel = dm.hparams.out_vars.index(variable)
-    in_channel = dm.hparams.in_vars.index(variable)
+    out_channel = dm.out_vars.index(variable)
+    in_channel = dm.in_vars.index(variable)
 
-    history = dm.hparams.history
+    history = mm.history
 
-    print("dm.hparams",dm.hparams,flush=True)
     print("out_channel",out_channel,"history",history,flush=True)
 
     if src == "era5":
@@ -36,7 +35,7 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, index
         batch_size = x.shape[0]
         if index in range(counter, counter + batch_size):
             adj_index = index - counter
-            x = x.to(mm.device)
+            x = x.to(device)
             pred = mm.forward(x)
             break
         counter += batch_size
@@ -46,7 +45,7 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, index
     if adj_index is None:
         raise RuntimeError("Given index could not be found")
     xx = x[adj_index]
-    if dm.hparams.task == "continuous-forecasting":
+    if dm.task == "continuous-forecasting":
         xx = xx[:, :-1]
 
     # Create animation/plot of the input sequence
@@ -77,7 +76,7 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, index
 
         print("xx.shape",xx.shape,"in_channel",in_channel,flush=True)
 
-        if dm.hparams.task == "downscaling":
+        if dm.task == "downscaling":
             img = in_transform(xx)[in_channel].detach().cpu().numpy()
         else:
             img = in_transform(xx[0])[in_channel].detach().cpu().numpy()
@@ -107,6 +106,7 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, index
 
     # Plot the prediction
     ppred = out_transform(pred[adj_index])
+
     ppred = ppred[out_channel].detach().cpu().numpy()
     if src == "era5":
         ppred = np.flip(ppred, 0)
@@ -154,7 +154,7 @@ def visualize_sample(img, extent, title,vmin=-1,vmax=-1):
 def visualize_mean_bias(dm, mm, out_transform, variable, src):
     lat, lon = dm.get_lat_lon()
     extent = [lon.min(), lon.max(), lat.min(), lat.max()]
-    channel = dm.hparams.out_vars.index(variable)
+    channel = dm.out_vars.index(variable)
     if src == "era5":
         variable_with_units = f"{variable} ({ERA5_VAR_TO_UNIT[variable]})"
     elif src == "cmip6":

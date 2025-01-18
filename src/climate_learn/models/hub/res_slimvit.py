@@ -37,6 +37,7 @@ class Res_Slim_ViT(nn.Module):
         self.out_channels = out_channels
         self.patch_size = patch_size
 
+        self.history = history
         self.patch_embed = PatchEmbed(img_size, patch_size, self.in_channels, embed_dim)
         self.num_patches = self.patch_embed.num_patches
 
