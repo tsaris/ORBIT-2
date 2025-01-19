@@ -25,7 +25,7 @@ def perceptual(
 #        torchvision.utils.save_image(temp[0],'temp.png')
 
 
-    error = F.l1_loss(pred, target) + 0.5*loss_fn(pred,target)
+    error = F.l1_loss(pred, target) + 0.5*torch.mean(loss_fn(pred,target))
 
 
     return error
