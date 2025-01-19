@@ -164,6 +164,29 @@ def main(device):
  
     model = model.to(device)
 
+
+    #load model checkpoint
+
+    if args.checkpoint is not None:
+        if os.path.exists(args.checkpoint):
+            print("model resume from checkpoint",args.checkpoint," Checkpoint path found.",flush=True)
+
+            #map_location = 'cuda:'+str(device)
+            map_location = 'cpu'
+
+            checkpoint = torch.load(args.checkpoint,map_location=map_location)
+            model.load_state_dict(checkpoint['model_state_dict'])
+
+            del checkpoint
+        else:
+            print("resume from checkpoint was set to True. But the checkpoint path does not exist.",flush=True)
+
+            sys.exit("checkpoint path does not exist")
+
+
+
+
+
     seed_everything(0)
     default_root_dir = f"{args.preset}_downscaling_{args.variable}"
 
@@ -254,6 +277,24 @@ def main(device):
 	},
     )
 
+
+    epoch_start = 0
+    if args.checkpoint is not None:
+
+        print("optimizer resume from checkpoint",args.checkpoint," Checkpoint path found.",flush=True)
+
+        #map_location = 'cuda:'+str(device)
+        map_location = 'cpu'
+
+        checkpoint = torch.load(args.checkpoint,map_location=map_location)
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        epoch_start = checkpoint['epoch']+1
+
+        del checkpoint
+
+
+
     #get latitude and longitude
     lat, lon = data_module.get_lat_lon()
 
@@ -263,7 +304,7 @@ def main(device):
 
 
 
-    for epoch in range(0,args.max_epochs):
+    for epoch in range(epoch_start,args.max_epochs):
     
         #tell the model that we are in train mode. Matters because we have the dropout
         model.train()
