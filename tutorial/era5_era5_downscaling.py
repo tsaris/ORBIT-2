@@ -53,21 +53,74 @@ def training_step(
     batch_idx,
     net,
     device: int,
-    train_loss) -> torch.Tensor:
+    train_loss_metric) -> torch.Tensor:
     x, y, in_variables, out_variables = batch
     x = x.to(device)
     y = y.to(device)
         
     yhat = net.forward(x)
     yhat = replace_constant(y, yhat, out_variables)
-    losses = train_loss(yhat, y)
-    loss_name = getattr(train_loss, "name", "loss")
+    losses = train_loss_metric(yhat, y)
+    loss_name = getattr(train_loss_metric, "name", "loss")
     if losses.dim() == 0:  # aggregate loss only
         loss = losses
     else:  # per channel + aggregate
         loss = losses[-1]
         
     return loss
+
+
+def validation_step(
+    batch,
+    batch_idx: int,
+    net,
+    device: int,
+    val_loss_metrics,
+    val_target_transforms) -> torch.Tensor:
+
+    return evaluate_func(batch, "val",net,device,val_loss_metrics,val_target_transforms)
+
+
+def evaluate_func(
+    batch,
+    stage: str,
+    net,
+    device: int,
+    loss_metrics,
+    target_transforms):
+
+    x, y, in_variables, out_variables = batch
+    x = x.to(device)
+    y = y.to(device)
+ 
+    yhat = net.forward(x)
+    yhat = replace_constant(y, yhat, out_variables)
+
+    if stage == "val":
+        loss_fns = loss_metrics
+        transforms = target_transforms
+    elif stage == "test":
+        loss_fns = loss_metrics
+        transforms = self.target_transforms
+    else:
+        raise RuntimeError("Invalid evaluation stage")
+    loss_dict = {}
+    for i, lf in enumerate(loss_fns):
+
+        if transforms is not None and transforms[i] is not None:
+            yhat_ = transforms[i](yhat)
+            y_ = transforms[i](y)
+        losses = lf(yhat_, y_)
+        loss_name = getattr(lf, "name", f"loss_{i}")
+        if losses.dim() == 0:  # aggregate loss
+            loss_dict[f"{stage}/{loss_name}:agggregate"] = losses
+        else:  # per channel + aggregate
+            for var_name, loss in zip(out_variables, losses):
+                name = f"{stage}/{loss_name}:{var_name}"
+                loss_dict[name] = loss
+            loss_dict[f"{stage}/{loss_name}:aggregate"] = losses[-1]
+    return loss_dict
+
 
 
 
@@ -160,7 +213,7 @@ def main(device):
     model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms = cl.load_downscaling_module(device,data_module=data_module, architecture=args.preset)
   
     if dist.get_rank()==0:
-        print("train_loss",train_loss,"train_transform",train_transform,flush=True)
+        print("train_loss",train_loss,"train_transform",train_transform,"val_losses",val_losses,"val_transforms",val_transforms,flush=True)
  
     model = model.to(device)
 
@@ -301,9 +354,12 @@ def main(device):
     # get train data loader
     train_dataloader = data_module.train_dataloader()
 
+    # get validation data loader
+    val_dataloader = data_module.val_dataloader()
 
 
 
+    #perform training
     for epoch in range(epoch_start,args.max_epochs):
     
         #tell the model that we are in train mode. Matters because we have the dropout
@@ -327,10 +383,6 @@ def main(device):
                 print("epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," loss ",loss,flush=True)
     
             optimizer.zero_grad()
-            
-           
-
-
             loss.backward()
             optimizer.step()
 
@@ -384,6 +436,28 @@ def main(device):
         del model_states
         del optimizer_states
         del scheduler_states
+
+
+        #perform validation
+        if epoch%2==0:
+            with torch.no_grad():
+                #tell the model that we are in eval mode. Matters because we have the dropout
+                model.eval()
+
+                if world_rank==0:
+                    print("val epoch ",epoch,flush=True)
+    
+                for batch_idx, batch in enumerate(val_dataloader):
+
+                    if world_rank==0:
+                        torch.cuda.synchronize(device=device)
+                        tic1 = time.perf_counter() 
+
+                    losses = validation_step(batch, batch_idx,model,device,val_losses,val_transforms)
+    
+                    if world_rank==0:
+                        print("val epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," losses ",losses,flush=True)
+                    
 
 
 if __name__ == "__main__":
