@@ -457,7 +457,11 @@ def main(device):
     
                     if world_rank==0:
                         print("val epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," losses ",losses,flush=True)
-                    
+           
+                        torch.cuda.synchronize(device=device)
+                        tic4 = time.perf_counter() 
+                        print(f"my rank {dist.get_rank()}. tic4-tic1 in {(tic4-tic1):0.4f} seconds\n",flush=True)
+    
 
 
 if __name__ == "__main__":
