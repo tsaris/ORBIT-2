@@ -357,10 +357,10 @@ def load_architecture(task, data_module, architecture):
                     patch_size=2,
                     cnn_ratio = 4,
                     learn_pos_emb=True,
-                    embed_dim=256,
-                    depth=6,
-                    decoder_depth=1,
-                    num_heads=4,
+                    embed_dim=1024,
+                    depth=8,
+                    decoder_depth=2,
+                    num_heads=16,
                     mlp_ratio=4,
                 )
 
