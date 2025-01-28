@@ -1,10 +1,17 @@
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
+import torchvision
+import torch
 from scipy.stats import rankdata
 from tqdm import tqdm
 from ..data.processing.era5_constants import VAR_TO_UNIT as ERA5_VAR_TO_UNIT
 from ..data.processing.cmip6_constants import VAR_TO_UNIT as CMIP6_VAR_TO_UNIT
+
+def min_max_normalize(data):
+    min_val = data.min()
+    max_val = data.max()
+    return (data - min_val) / (max_val - min_val)
 
 
 def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, device, index=0):
@@ -82,6 +89,13 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, devic
             img = in_transform(xx[0])[in_channel].detach().cpu().numpy()
         if src == "era5":
             img = np.flip(img, 0)
+
+
+        temp = min_max_normalize(img)
+
+
+        torchvision.utils.save_image(torch.from_numpy(temp.copy()), 'input_torchvision.png') 
+
         visualize_sample(img, extent, f"Input: {variable_with_units}")
         anim = None
         plt.show()
@@ -99,6 +113,14 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, devic
 
     yy_min = np.min(yy)
     yy_max = np.max(yy)
+
+
+    temp = min_max_normalize(yy)
+
+    torchvision.utils.save_image(torch.from_numpy(temp.copy()), 'target_torchvision.png') 
+
+
+
 
     visualize_sample(yy, extent, f"Ground truth: {variable_with_units}",vmin=yy_min,vmax=yy_max)
     plt.show()
