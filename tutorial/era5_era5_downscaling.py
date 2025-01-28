@@ -38,6 +38,56 @@ from climate_learn.models.hub.components.cnn_blocks import (
 
 
 
+def load_pretrained_weights(model, pretrained_path, device):
+    # map_location = 'cuda:'+str(device)
+    map_location = 'cpu'
+    checkpoint = torch.load(pretrained_path, map_location=map_location)
+
+    print("Loading pre-trained checkpoint from: %s" % pretrained_path)
+    pretrain_model = checkpoint["model_state_dict"]
+
+    del checkpoint
+
+
+    state_dict = model.state_dict()
+   
+    for k in list(pretrain_model.keys()):
+        print("Pretrained model before deletion. Name ",k,flush=True)
+
+
+    # checkpoint_keys = list(pretrain_model.keys())
+    for k in list(pretrain_model.keys()):
+        if "pos_embed" in k:
+            print(f"Removing pos_embed")
+            del pretrain_model[k]
+        if "var_" in k:
+            print(f"Removing var_embed, var_query and var_agg")
+            del pretrain_model[k]
+        if  "token_embeds" in k:
+            print(f"Removing token_embed")
+            del pretrain_model[k]
+        if "channel" in k:
+            print("k:", k)
+            pretrain_model[k.replace("channel", "var")] = pretrain_model[k]
+            del pretrain_model[k]
+    for k in list(pretrain_model.keys()):  #in pre-train model weights, but not fine-tuning model
+        if k not in state_dict.keys():
+            print(f"Removing key {k} from pretrained checkpoint: no exist")
+            del pretrain_model[k]
+        elif pretrain_model[k].shape != state_dict[k].shape:  #if pre-train and fine-tune model weights dimension doesn't match
+            print(f"Removing key {k} from pretrained checkpoint: no matching shape", pretrain_model[k].shape, state_dict[k].shape)
+            del pretrain_model[k]
+
+
+  
+#    for k in list( checkpoint_model.keys()):
+#        print("after deletion. Name ",k,flush=True)
+
+    # load pre-trained model
+    msg = model.load_state_dict(pretrain_model, strict=False)
+    print(msg)
+    del pretrain_model
+
 
 
 def replace_constant(y, yhat, out_variables):
@@ -210,7 +260,7 @@ def main(device):
         in_vars,
         out_vars=[out_var_dict[args.variable]],
         subsample=1,
-        batch_size=32,
+        batch_size=64,
         buffer_size=500,
         num_workers=1,
     ).to(device)
@@ -246,7 +296,7 @@ def main(device):
     if args.pretrain is not None:
         if os.path.exists(args.pretrain):
             print("load pretrained model",args.pretrain," Pretrain path found.",flush=True)
-            load_pretrained_weights(model,pretrain,device)  
+            load_pretrained_weights(model,args.pretrain,device)  
         else:
             print("resume from pretrained model was set to True. But the pretrained model path does not exist.",flush=True)
 
