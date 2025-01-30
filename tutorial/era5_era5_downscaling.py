@@ -260,8 +260,8 @@ def main(device):
         in_vars,
         out_vars=[out_var_dict[args.variable]],
         subsample=1,
-        batch_size=64,
-        buffer_size=500,
+        batch_size=32,
+        buffer_size=200,
         num_workers=1,
     ).to(device)
     data_module.setup()
