@@ -242,7 +242,7 @@ load_climatebench_module = partial(
 load_downscaling_module = partial(
     load_model_module,
     task="downscaling",
-    train_loss="mse",
+    train_loss="perceptual",
     val_loss=["rmse", "pearson", "mean_bias", "mse"],
     test_loss=["rmse", "pearson", "mean_bias"],
     train_target_transform=None,
@@ -354,13 +354,13 @@ def load_architecture(task, data_module, architecture):
                     out_channels,
                     superres_factor = 4,
                     history=1,
-                    patch_size=2,
+                    patch_size=4,
                     cnn_ratio = 4,
                     learn_pos_emb=True,
-                    embed_dim=1024,
-                    depth=8,
-                    decoder_depth=2,
-                    num_heads=16,
+                    embed_dim=512,
+                    depth=6,
+                    decoder_depth=1,
+                    num_heads=4,
                     mlp_ratio=4,
                 )
 
