@@ -17,7 +17,7 @@ from torchvision.models import vgg16
 import numpy as np
 import torch
 import os
-import torch.nn as nn
+from torch.nn import Sequential
 import lpips
 from lpips import NetLinLayer 
 class Metric:
@@ -145,12 +145,12 @@ class PERCEPTUAL(Metric):
         auto_wrap_policy = functools.partial(
             transformer_auto_wrap_policy,
             transformer_layer_cls={
-               nn.Sequential   # < ---- Your Transformer layer class
+               Sequential   # < ---- Your Transformer layer class
             },
         )
 
 
-        check_fn = lambda submodule: isinstance(submodule, nn.Sequential)
+        check_fn = lambda submodule: isinstance(submodule, Sequential)
 
 
 
