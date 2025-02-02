@@ -15,6 +15,7 @@ from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
 from torch.distributed.fsdp import MixedPrecision
 from torch.distributed.fsdp.sharded_grad_scaler import ShardedGradScaler
 from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.nn import Sequential
 from datetime import timedelta
 import sys
 import random
@@ -230,7 +231,7 @@ def main(device):
         "geopotential",
         "temperature",
     #    "relative_humidity",
-        "specific_humidity",
+    #    "specific_humidity",
     #    "u_component_of_wind",
     #    "v_component_of_wind",
     ]
@@ -260,8 +261,8 @@ def main(device):
         in_vars,
         out_vars=[out_var_dict[args.variable]],
         subsample=1,
-        batch_size=32,
-        buffer_size=200,
+        batch_size=64,
+        buffer_size=400,
         num_workers=1,
     ).to(device)
     data_module.setup()
@@ -314,11 +315,11 @@ def main(device):
         auto_wrap_policy = functools.partial(
             transformer_auto_wrap_policy,
             transformer_layer_cls={
-                Block # < ---- Your Transformer layer class
+                Block, Sequential # < ---- Your Transformer layer class
             },
         )
 
-        check_fn = lambda submodule: isinstance(submodule, Block)
+        check_fn = lambda submodule: isinstance(submodule, Block)  or isinstance(submodule,Sequential)
 
 
 
