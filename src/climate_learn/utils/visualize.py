@@ -91,11 +91,6 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, devic
             img = np.flip(img, 0)
 
 
-        temp = min_max_normalize(img)
-
-
-        torchvision.utils.save_image(torch.from_numpy(temp.copy()), 'input_torchvision.png') 
-
         visualize_sample(img, extent, f"Input: {variable_with_units}")
         anim = None
         plt.show()
@@ -113,13 +108,6 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, devic
 
     yy_min = np.min(yy)
     yy_max = np.max(yy)
-
-
-    temp = min_max_normalize(yy)
-
-    torchvision.utils.save_image(torch.from_numpy(temp.copy()), 'target_torchvision.png') 
-
-
 
 
     visualize_sample(yy, extent, f"Ground truth: {variable_with_units}",vmin=yy_min,vmax=yy_max)
