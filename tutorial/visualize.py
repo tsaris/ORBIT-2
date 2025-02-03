@@ -67,11 +67,14 @@ variables = [
     "geopotential",
     "temperature",
 #    "relative_humidity",
-    "specific_humidity",
+#    "specific_humidity",
 #    "u_component_of_wind",
 #    "v_component_of_wind",
 ]
 out_var_dict = {
+#     "lsm": "land_sea_mask",
+#    "oro": "orography",
+#     "lat2d": "lattitude",
     "t2m": "2m_temperature",
 #    "z500": "geopotential_500",
 #    "t850": "temperature_850",
@@ -89,8 +92,8 @@ for var in variables:
 #load data module
 data_module = cl.data.IterDataModule(
     "downscaling",
-    "/lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg", 
-    "/lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg",
+    "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/1.0_deg/", 
+    "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/0.25_deg/",
     in_vars,
     out_vars=[out_var_dict["t2m"]],
     subsample=1,
@@ -117,7 +120,7 @@ denorm = test_transforms[0]
 
 print("denorm is ",denorm,flush=True)
 
-checkpoint_file = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/ERA5_rank_0_epoch_18.ckpt"
+checkpoint_file = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/ERA5_rank_0_epoch_36.ckpt"
 
 if os.path.exists(checkpoint_file):
     print("resume from checkpoint was set to True. Checkpoint path found.",flush=True)
