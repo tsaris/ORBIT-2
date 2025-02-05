@@ -35,12 +35,15 @@ os.environ['MASTER_ADDR'] = str(os.environ['HOSTNAME'])
 os.environ['MASTER_PORT'] = "29500"
 os.environ['WORLD_SIZE'] = os.environ['SLURM_NTASKS']
 os.environ['RANK'] = os.environ['SLURM_PROCID']
+print("MASTER_ADDR:", os.environ['MASTER_ADDR'])
+print("MASTER_PORT:", os.environ['MASTER_PORT'])
 
 world_size = int(os.environ['SLURM_NTASKS'])
 world_rank = int(os.environ['SLURM_PROCID'])
 local_rank = int(os.environ['SLURM_LOCALID'])
+print("world_size, world_rank, local_rank:", world_size, world_rank, local_rank)
 
-num_nodes = world_size//8
+num_nodes = (world_size-1)//8 + 1
 
 torch.cuda.set_device(local_rank)
 device = torch.cuda.current_device()
@@ -54,7 +57,7 @@ parser.add_argument("era5_low_res_dir")
 parser.add_argument("era5_high_res_dir")
 parser.add_argument("preset", choices=["resnet", "unet", "vit","res_slimvit"])
 parser.add_argument(
-    "variable", choices=["t2m", "z500", "t850","u10"], help="The variable to predict."
+    "variable", choices=["t2m", "z500", "t850","u10","ppt","prcp"], help="The variable to predict."
 )
 parser.add_argument("--summary_depth", type=int, default=1)
 parser.add_argument("--max_epochs", type=int, default=50)
@@ -62,6 +65,62 @@ parser.add_argument("--patience", type=int, default=5)
 parser.add_argument("--checkpoint", default=None)
 args = parser.parse_args()
 
+if "ERA5" in args.era5_low_res_dir:
+    variables = [
+        "land_sea_mask",
+        "orography",
+        "lattitude",
+    #    "toa_incident_solar_radiation",
+        "2m_temperature",
+        "10m_u_component_of_wind",
+        "10m_v_component_of_wind",
+        "geopotential",
+        "temperature",
+    #    "relative_humidity",
+        "specific_humidity",
+    #    "u_component_of_wind",
+    #    "v_component_of_wind",
+    ]
+
+if "prism" in args.era5_low_res_dir:
+    variables = [
+        "land_sea_mask",
+        "lattitude",
+        "prcp",
+        "tmin",
+        "tmax",
+    ]
+
+if "daymet" in args.era5_low_res_dir:
+    variables = [
+        "land_sea_mask",
+        "lattitude",
+        "prcp",
+        "tmin",
+        "tmax",
+    ]
+
+if "ERA5-Daymet" in args.era5_low_res_dir:
+    variables = [
+        "land_sea_mask",
+        "orography",
+        "lattitude",
+        "geopotential_500",
+        "geopotential_850",
+        "u_component_of_wind_500",
+        "u_component_of_wind_850",
+        "v_component_of_wind_500",
+        "v_component_of_wind_850",
+        "temperature_500",
+        "temperature_850",
+        "specific_humidity_500",
+        "specific_humidity_850",
+        "prcp",
+    ]
+
+print("variables:", variables)
+
+"""
 # Set up data
 variables = [
     "land_sea_mask",
@@ -78,12 +137,16 @@ variables = [
 #    "u_component_of_wind",
 #    "v_component_of_wind",
 ]
+"""
 out_var_dict = {
-    "t2m": "2m_temperature",
+#    "tmax": "max_temperature",
 #    "z500": "geopotential_500",
 #    "t850": "temperature_850",
 #     "u10": "10m_u_component_of_wind"
+#    "ppt": "ppt",
+    "prcp": "prcp",
 }
+
 in_vars = []
 for var in variables:
     if var in PRESSURE_LEVEL_VARS:
@@ -91,6 +154,7 @@ for var in variables:
             in_vars.append(var + "_" + str(level))
     else:
         in_vars.append(var)
+
 dm = cl.data.IterDataModule(
     "downscaling",
     args.era5_low_res_dir,
@@ -114,7 +178,24 @@ if world_rank==0:
 
 # Setup trainer
 pl.seed_everything(0)
-default_root_dir = f"{args.preset}_downscaling_{args.variable}"
+prefix = ""
+if "ERA5" in args.era5_low_res_dir:
+    prefix = "era5_"
+if "prism" in args.era5_low_res_dir:
+    prefix = "prism_"
+if "daymet" in args.era5_low_res_dir:
+    prefix = "daymet_"
+if "ERA5-Daymet" in args.era5_low_res_dir:
+    prefix = "era5-daymet_"
+if "1hr" in args.era5_low_res_dir:
+    prefix += "1hr_"
+if "1dy" in args.era5_low_res_dir:
+    prefix += "1dy_"
+
+default_root_dir = f"{prefix}{args.preset}_downscaling_{args.variable}"
+jobid = os.getenv("SLURM_JOB_ID")
+if jobid is not None:
+    default_root_dir = default_root_dir + f"_{jobid}"
 logger = TensorBoardLogger(save_dir=f"{default_root_dir}/logs")
 early_stopping = "train/mse:aggregate"
 

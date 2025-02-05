@@ -5,8 +5,8 @@
 #SBATCH --gres=gpu:8
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
-#SBATCH -t 01:00:00
-#SBATCH -q debug
+#SBATCH -t 00:30:00
+#SBATCH -p batch
 #SBATCH -o flash-%j.out
 #SBATCH -e flash-%j.out
 
@@ -44,4 +44,4 @@ export OMP_NUM_THREADS=7
 export PYTHONPATH=$PWD:$PYTHONPATH
 
 time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-python ./era5_era5_downscaling.py --max_epochs 30 /lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/prism-superres/10.0_arcmin/ /lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/prism-superres/2.5_arcmin/ res_slimvit t2m 
+python ./prism_prism_downscaling.py --max_epochs 30 /lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/prism-superres/10.0_arcmin/ /lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/prism-superres/2.5_arcmin/ res_slimvit prcp 
