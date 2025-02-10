@@ -31,7 +31,7 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, devic
     elif src == "cmip6":
         variable_with_units = f"{variable} ({CMIP6_VAR_TO_UNIT[variable]})"
     elif src == "prism":
-        variable_with_units = f"Daily Max Temperature (C)"
+        variable_with_units = f"{variable}"
     else:
         raise NotImplementedError(f"{src} is not a supported source")
 
@@ -97,6 +97,27 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, devic
         plt.savefig('input.png')
         print("input shape",img.shape,flush=True)
 
+    # Plot the prediction
+    ppred = out_transform(pred[adj_index])
+
+    ppred = ppred[out_channel].detach().cpu().numpy()
+    if src == "era5":
+        ppred = np.flip(ppred, 0)
+
+
+    ppred_min = np.min(ppred)
+    ppred_max = np.max(ppred)
+
+
+
+    visualize_sample(ppred, extent, f"Prediction: {variable_with_units}",vmin=ppred_min,vmax=ppred_max)
+    plt.show()
+    plt.savefig('prediction.png')
+
+    print("prediction ppred.shape",ppred.shape,"extent",flush=True)
+
+
+
     # Plot the ground truth
     yy = out_transform(y[adj_index])
     yy = yy[out_channel].detach().cpu().numpy()
@@ -106,25 +127,14 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, devic
     print("ground truth yy.shape",yy.shape,"extent",extent,flush=True)
 
 
-    yy_min = np.min(yy)
-    yy_max = np.max(yy)
+
+    if yy.shape[0]!=ppred.shape[0] or yy.shape[1]!=ppred.shape[1]:
+        yy= yy[0:ppred.shape[0],0:ppred.shape[1]]
 
 
-    visualize_sample(yy, extent, f"Ground truth: {variable_with_units}",vmin=yy_min,vmax=yy_max)
+    visualize_sample(yy, extent, f"Ground truth: {variable_with_units}",vmin=ppred_min,vmax=ppred_max)
     plt.show()
     plt.savefig('groundtruth.png')
-
-    # Plot the prediction
-    ppred = out_transform(pred[adj_index])
-
-    ppred = ppred[out_channel].detach().cpu().numpy()
-    if src == "era5":
-        ppred = np.flip(ppred, 0)
-    visualize_sample(ppred, extent, f"Prediction: {variable_with_units}",vmin=yy_min,vmax=yy_max)
-    plt.show()
-    plt.savefig('prediction.png')
-
-    print("prediction ppred.shape",ppred.shape,"extent",flush=True)
 
 
 
