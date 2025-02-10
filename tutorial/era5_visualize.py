@@ -120,7 +120,7 @@ denorm = test_transforms[0]
 
 print("denorm is ",denorm,flush=True)
 
-checkpoint_file = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/ERA5_rank_0_epoch_36.ckpt"
+checkpoint_file = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/ERA5_rank_0_epoch_61.ckpt"
 
 if os.path.exists(checkpoint_file):
     print("resume from checkpoint was set to True. Checkpoint path found.",flush=True)
