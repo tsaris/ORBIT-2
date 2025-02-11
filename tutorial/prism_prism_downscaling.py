@@ -21,6 +21,7 @@ import sys
 import random
 import time
 import numpy as np
+import yaml
 
 # Third party
 import climate_learn as cl
@@ -453,59 +454,37 @@ def main(device):
 
     print("world_size",world_size,"world_rank",world_rank,"local_rank",local_rank,flush=True)
 
-
-    parser = ArgumentParser()
-    parser.add_argument("low_res_dir")
-    parser.add_argument("high_res_dir")
-    parser.add_argument("preset", choices=["resnet", "unet", "vit","res_slimvit"])
-    parser.add_argument(
-        "variable", choices=["t2m", "z500", "t850","u10","ppt","prcp"], help="The variable to predict."
-    )
-    parser.add_argument("--summary_depth", type=int, default=1)
-    parser.add_argument("--max_epochs", type=int, default=50)
-    parser.add_argument("--patience", type=int, default=5)
-    parser.add_argument("--checkpoint", default=None)
-    parser.add_argument("--pretrain", default=None)
-
-    args = parser.parse_args()
-
+    config_path = sys.argv[1]
 
     if world_rank==0:
-        print("args is",args,flush=True)
+        print("config_path",config_path,flush=True)
+
+    conf = yaml.load(open(config_path,'r'),Loader=yaml.FullLoader)
+
+    max_epochs=conf['trainer']['max_epochs']
+    checkpoint_path = conf['trainer']['checkpoint']
+    pretrain_path = conf['trainer']['pretrain']
+    low_res_dir = conf['data']['low_res_dir']
+    high_res_dir = conf['data']['high_res_dir']
+    preset = conf['model']['preset']
+    out_variable = conf['data']['out_variable']
+    dict_in_variables = conf['data']['dict_in_variables']
+    out_var_dict = conf['data']['out_var_dict']
+
+    if world_rank==0:
+        print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir," ",preset," ",out_variable," ",out_var_dict,flush=True)
 
 
     #if both checkpoint and pretrain are available, use checkpoint
-    if args.checkpoint is not None and args.pretrain is not None:
-        args.pretrain = None
+    if checkpoint_path is not None and pretrain_path is not None:
+        pretrain_path = None
 
     # Set up data
-    variables = [
-        "land_sea_mask",
-    #    "orography",
-        "lattitude",
-        "prcp",
-        "tmin",
-        "tmax",
-    #    "toa_incident_solar_radiation",
-    #    "2m_temperature",
-    #    "10m_u_component_of_wind",
-    #    "10m_v_component_of_wind",
-    #    "geopotential",
-    #    "temperature",
-    #    "relative_humidity",
-    #    "specific_humidity",
-    #    "u_component_of_wind",
-    #    "v_component_of_wind",
-    ]
-    out_var_dict = {
 
-#        "lattitude",
-        "t2m": "2m_temperature",
-        "z500": "geopotential_500",
-        "t850": "temperature_850",
-        "u10": "10m_u_component_of_wind",
-        "prcp": "prcp"
-    }
+
+
+    variables = dict_in_variables["PRISM"]
+    
     in_vars = []
     for var in variables:
         if var in PRESSURE_LEVEL_VARS:
@@ -521,10 +500,10 @@ def main(device):
     #load data module
     data_module = cl.data.IterDataModule(
         "downscaling",
-        args.low_res_dir,
-        args.high_res_dir,
+        low_res_dir,
+        high_res_dir,
         in_vars,
-        out_vars=[out_var_dict[args.variable]],
+        out_vars=[out_var_dict[out_variable]],
         subsample=1,
         batch_size=64,
         buffer_size=400,
@@ -533,7 +512,7 @@ def main(device):
     data_module.setup()
 
     # Set up deep learning model
-    model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms = cl.load_downscaling_module(device,data_module=data_module, architecture=args.preset)
+    model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms = cl.load_downscaling_module(device,data_module=data_module, architecture=preset)
   
     if dist.get_rank()==0:
         print("train_loss",train_loss,"train_transform",train_transform,"val_losses",val_losses,"val_transforms",val_transforms,flush=True)
@@ -542,14 +521,14 @@ def main(device):
 
 
     #load model checkpoint
-    if args.checkpoint is not None:
-        if os.path.exists(args.checkpoint):
-            print("model resume from checkpoint",args.checkpoint," Checkpoint path found.",flush=True)
+    if checkpoint_path is not None:
+        if os.path.exists(checkpoint_path):
+            print("model resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
 
             #map_location = 'cuda:'+str(device)
             map_location = 'cpu'
 
-            checkpoint = torch.load(args.checkpoint,map_location=map_location)
+            checkpoint = torch.load(checkpoint_path,map_location=map_location)
             model.load_state_dict(checkpoint['model_state_dict'])
 
             del checkpoint
@@ -559,10 +538,10 @@ def main(device):
             sys.exit("checkpoint path does not exist")
 
     #load pretrained model
-    if args.pretrain is not None:
-        if os.path.exists(args.pretrain):
-            print("load pretrained model",args.pretrain," Pretrain path found.",flush=True)
-            load_pretrained_weights(model,args.pretrain,device)  
+    if pretrain_path is not None:
+        if os.path.exists(pretrain_path):
+            print("load pretrained model",pretrain_path," Pretrain path found.",flush=True)
+            load_pretrained_weights(model,pretrain_path,device)  
         else:
             print("resume from pretrained model was set to True. But the pretrained model path does not exist.",flush=True)
 
@@ -571,11 +550,11 @@ def main(device):
 
 
     seed_everything(0)
-    default_root_dir = f"{args.preset}_downscaling_{args.variable}"
+    default_root_dir = f"{preset}_downscaling_{out_variable}"
 
 
     #set up layer wrapping
-    if args.preset =="vit" or args.preset=="res_slimvit":
+    if preset =="vit" or preset=="res_slimvit":
    
         auto_wrap_policy = functools.partial(
             transformer_auto_wrap_policy,
@@ -588,7 +567,7 @@ def main(device):
 
 
 
-    elif args.preset =="unet":
+    elif preset =="unet":
         auto_wrap_policy = functools.partial(
             transformer_auto_wrap_policy,
             transformer_layer_cls={
@@ -654,7 +633,7 @@ def main(device):
 	optimizer,
 	{
 	    "warmup_epochs": 2,  
-	    "max_epochs": args.max_epochs,
+	    "max_epochs": max_epochs,
 	    "warmup_start_lr": 1e-7,
 	    "eta_min": 1e-7,
 	},
@@ -662,14 +641,14 @@ def main(device):
 
 
     epoch_start = 0
-    if args.checkpoint is not None:
+    if checkpoint_path is not None:
 
-        print("optimizer resume from checkpoint",args.checkpoint," Checkpoint path found.",flush=True)
+        print("optimizer resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
 
         #map_location = 'cuda:'+str(device)
         map_location = 'cpu'
 
-        checkpoint = torch.load(args.checkpoint,map_location=map_location)
+        checkpoint = torch.load(checkpoint_path,map_location=map_location)
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         epoch_start = checkpoint['epoch']+1
@@ -690,7 +669,7 @@ def main(device):
 
 
     #perform training
-    for epoch in range(epoch_start,args.max_epochs):
+    for epoch in range(epoch_start,max_epochs):
     
         #tell the model that we are in train mode. Matters because we have the dropout
         model.train()

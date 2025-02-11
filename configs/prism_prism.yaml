@@ -1,0 +1,37 @@
+#-----------   TRAINER -------------
+trainer:
+  max_epochs: 100
+  checkpoint: 
+  pretrain: 
+
+
+# ---------------------------- MODEL -------------------------------------------
+model:
+  preset: res_slimvit
+
+# ---------------------------- DATA -------------------------------------------
+data:
+  low_res_dir: "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/prism-superres/10.0_arcmin/"
+  high_res_dir: "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/prism-superres/2.5_arcmin/"
+
+  dict_in_variables: {
+    'PRISM': [
+      "land_sea_mask",
+      "lattitude",
+      "prcp",
+      "tmin",
+      "tmax",
+    ],
+  }
+
+
+  out_var_dict: {
+      "t2m": "2m_temperature",
+      "z500": "geopotential_500",
+      "t850": "temperature_850",
+      "u10": "10m_u_component_of_wind",
+      "prcp": "prcp"
+  }
+
+
+  out_variable: prcp
