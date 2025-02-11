@@ -2,7 +2,7 @@
 import copy
 import glob
 import os
-from typing import Dict, Optional
+from typing import Dict, Optional, OrderedDict
 
 # Third party
 import numpy as np
@@ -19,6 +19,8 @@ from .iterdataset import (
     IndividualDataIter,
     ShuffleIterableDataset,
 )
+from .processing.era5_constants import PRECIP_VARIABLES
+from .precipmodule import LogTransform
 
 
 class IterDataModule(torch.nn.Module):
@@ -154,15 +156,22 @@ class IterDataModule(torch.nn.Module):
     def get_normalize(self, root_dir, variables):
         normalize_mean = dict(np.load(os.path.join(root_dir, "normalize_mean.npz")))
         normalize_std = dict(np.load(os.path.join(root_dir, "normalize_std.npz")))
-        return {
-            var: transforms.Normalize(normalize_mean[var][0], normalize_std[var][0])
-            for var in variables
-        }
-
+        normed = OrderedDict()
+        for var in variables:
+            if var in PRECIP_VARIABLES:
+                if var == 'total_precipitation':
+                    m2mm=hour2day=True
+                else:
+                    m2mm=hour2day=False
+                normed[var] = LogTransform(m2mm, hour2day) 
+            else:
+                normed[var] = transforms.Normalize(normalize_mean[var][0], normalize_std[var][0])
+        return normed
+ 
     def get_out_transforms(self):
         out_transforms = {}
         for key in self.output_transforms.keys():
-            if key == "2m_temperature_extreme_mask":
+            if key in ("2m_temperature_extreme_mask"):
                 continue
             out_transforms[key] = self.output_transforms[key]
         return out_transforms
