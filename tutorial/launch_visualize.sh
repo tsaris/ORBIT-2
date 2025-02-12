@@ -43,5 +43,5 @@ mkdir -p $MIOPEN_USER_DB_PATH
 export OMP_NUM_THREADS=7
 export PYTHONPATH=$PWD:$PYTHONPATH
 
-time srun -n $((SLURM_JOB_NUM_NODES*1)) python ./prism_visualize.py
+time srun -n $((SLURM_JOB_NUM_NODES*1)) python ./prism_visualize.py ../configs/prism_prism.yaml
 
