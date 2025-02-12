@@ -3,11 +3,31 @@ trainer:
   max_epochs: 100
   checkpoint: 
   pretrain: 
+  batch_size: 64
+  buffer_size: 400
+  num_workers: 1
 
 
 # ---------------------------- MODEL -------------------------------------------
 model:
   preset: res_slimvit
+  lr: 5e-5
+  weight_decay: 1e-5
+  beta_1: 0.9
+  beta_2: 0.99
+  warmup_epochs: 2
+  warmup_start_lr: 1e-7
+  eta_min: 1e-7
+  superres_mag: 4
+  cnn_ratio: 4
+  patch_size: 2
+  embed_dim: 512
+  depth: 8
+  decoder_depth: 2
+  num_heads: 4
+  mlp_ratio: 4
+  drop_path: 0.1
+  drop_rate: 0.1
 
 # ---------------------------- DATA -------------------------------------------
 data:
