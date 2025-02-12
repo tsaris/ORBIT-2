@@ -463,6 +463,10 @@ def main(device):
 
     max_epochs=conf['trainer']['max_epochs']
     checkpoint_path = conf['trainer']['checkpoint']
+    batch_size = conf['trainer']['batch_size']
+    num_workers = conf['trainer']['num_workers']
+    buffer_size = conf['trainer']['buffer_size']
+    
     pretrain_path = conf['trainer']['pretrain']
     low_res_dir = conf['data']['low_res_dir']
     high_res_dir = conf['data']['high_res_dir']
@@ -471,8 +475,39 @@ def main(device):
     dict_in_variables = conf['data']['dict_in_variables']
     out_var_dict = conf['data']['out_var_dict']
 
+    lr = float(conf['model']['lr'])
+    beta_1 = float(conf['model']['beta_1'])
+    beta_2 = float(conf['model']['beta_2'])
+    weight_decay = float(conf['model']['weight_decay'])
+    warmup_epochs =  conf['model']['warmup_epochs']
+    warmup_start_lr =  float(conf['model']['warmup_start_lr'])
+    eta_min =  float(conf['model']['eta_min'])
+
+    superres_mag = conf['model']['superres_mag']
+    cnn_ratio = conf['model']['cnn_ratio']
+    patch_size =  conf['model']['patch_size']
+    embed_dim = conf['model']['embed_dim']
+    depth = conf['model']['depth']
+    decoder_depth = conf['model']['decoder_depth']
+    num_heads = conf['model']['num_heads']
+    mlp_ratio = conf['model']['mlp_ratio']
+    drop_path = conf['model']['drop_path']
+    drop_rate = conf['model']['drop_rate']
+
     if world_rank==0:
-        print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir," ",preset," ",out_variable," ",out_var_dict,flush=True)
+        print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir,"preset",preset," ",out_variable," ",out_var_dict,"lr",lr,"beta_1",beta_1,"beta_2",beta_2,"weight_decay",weight_decay,"warmup_epochs",warmup_epochs,"warmup_start_lr",warmup_start_lr,"eta_min",eta_min,"superres_mag",superres_mag,"cnn_ratio",cnn_ratio,"patch_size",patch_size,"embed_dim",embed_dim,"depth",depth,"decoder_depth",decoder_depth,"num_heads",num_heads,"mlp_ratio",mlp_ratio,"drop_path",drop_path,"drop_rate",drop_rate,"batch_size",batch_size,"num_workers",num_workers,"buffer_size",buffer_size,flush=True)
+
+
+    model_kwargs = {'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate}
+
+
+    if world_rank==0:
+        print("model_kwargs",model_kwargs,flush=True)
+
+
+    if preset!="vit" and preset!="res_slimvit":
+        print("Only supports vit or residual slim vit training.",flush=True)
+        sys.exit("Not vit or res_slimvit architecture")
 
 
     #if both checkpoint and pretrain are available, use checkpoint
@@ -505,14 +540,14 @@ def main(device):
         in_vars,
         out_vars=[out_var_dict[out_variable]],
         subsample=1,
-        batch_size=64,
-        buffer_size=400,
-        num_workers=1,
+        batch_size=batch_size,
+        buffer_size=buffer_size,
+        num_workers=num_workers,
     ).to(device)
     data_module.setup()
 
     # Set up deep learning model
-    model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms = cl.load_downscaling_module(device,data_module=data_module, architecture=preset)
+    model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms = cl.load_downscaling_module(device,data_module=data_module, architecture=preset,model_kwargs=model_kwargs)
   
     if dist.get_rank()==0:
         print("train_loss",train_loss,"train_transform",train_transform,"val_losses",val_losses,"val_transforms",val_transforms,flush=True)
@@ -567,29 +602,6 @@ def main(device):
 
 
 
-    elif preset =="unet":
-        auto_wrap_policy = functools.partial(
-            transformer_auto_wrap_policy,
-            transformer_layer_cls={
-                UpBlock,DownBlock,MiddleBlock  # < ---- Your Transformer layer class
-            },
-        )
-
-        check_fn = lambda submodule: isinstance(submodule, UpBlock) or isinstance(submodule, DownBlock) or isinstance(submodule, MiddleBlock)
-
-
-
-    else: #resnet
-        auto_wrap_policy = functools.partial(
-            transformer_auto_wrap_policy,
-            transformer_layer_cls={
-                ResidualBlock  # < ---- Your Transformer layer class
-            },
-        )
-        check_fn = lambda submodule: isinstance(submodule, ResidualBlock)
-
-
-
     #bfloat16 policy
     bfloatPolicy = MixedPrecision(
         param_dtype=torch.bfloat16,
@@ -625,17 +637,17 @@ def main(device):
 
 
     optimizer = cl.load_optimizer(
-	model, "adamw", {"lr": 5e-5, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
+	model, "adamw", {"lr": lr, "weight_decay": weight_decay, "betas": (beta_1, beta_2)}
     )
 
     scheduler = cl.load_lr_scheduler(
 	"linear-warmup-cosine-annealing",
 	optimizer,
 	{
-	    "warmup_epochs": 2,  
+	    "warmup_epochs": warmup_epochs,  
 	    "max_epochs": max_epochs,
-	    "warmup_start_lr": 1e-7,
-	    "eta_min": 1e-7,
+	    "warmup_start_lr": warmup_start_lr,
+	    "eta_min": eta_min,
 	},
     )
 

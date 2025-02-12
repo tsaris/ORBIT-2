@@ -55,8 +55,16 @@ def load_model_module(
     elif architecture:
         print(f"Loading architecture: {architecture}")
         model  = load_architecture(
-            task, data_module, architecture
+            task, data_module, architecture, **model_kwargs
         )
+
+
+
+
+    if torch.distributed.get_rank()==0:
+        print("Inside load_model_module model_kwargs",model_kwargs,flush=True)
+
+
 
 
     elif isinstance(model, str):
@@ -251,7 +259,7 @@ load_downscaling_module = partial(
 )
 
 
-def load_architecture(task, data_module, architecture):
+def load_architecture(task, data_module, architecture, superres_mag=4,cnn_ratio=4, patch_size=2,embed_dim=256,depth=6,decoder_depth=1,num_heads=4,mlp_ratio=4,drop_path=0.1,drop_rate=0.1):
     in_vars, out_vars = get_data_variables(data_module)
     in_shape, out_shape = get_data_dims(data_module)
 
@@ -326,25 +334,21 @@ def load_architecture(task, data_module, architecture):
             model = Interpolation((out_height, out_width), interpolation_mode)
             optimizer = lr_scheduler = None
         else:
-            if architecture == "resnet":
-                backbone = ResNet(in_channels, out_channels, n_blocks=28)
-            elif architecture == "unet":
-                backbone = Unet(
-                    in_channels, out_channels, ch_mults=[1, 1, 2], n_blocks=4
-                )
-            elif architecture == "vit":
+            if architecture == "vit":
                 backbone = VisionTransformer(
                     (out_height, out_width),
                     in_channels,
                     out_channels,
                     history=1,
-                    patch_size=2,
+                    patch_size=patch_size,
                     learn_pos_emb=True,
-                    embed_dim=256,
-                    depth=6,
-                    decoder_depth=1,
-                    num_heads=4,
-                    mlp_ratio=4,
+                    embed_dim=embed_dim,
+                    depth=depth,
+                    decoder_depth=decoder_depth,
+                    num_heads=num_heads,
+                    mlp_ratio=mlp_ratio, 
+                    drop_path=drop_path,    
+                    drop_rate=drop_rate,
                 )
 
             elif architecture == "res_slimvit":
@@ -352,16 +356,18 @@ def load_architecture(task, data_module, architecture):
                     (in_height, in_width),
                     in_channels,
                     out_channels,
-                    superres_factor = 4,
+                    superres_mag = superres_mag,
                     history=1,
-                    patch_size=4,
-                    cnn_ratio = 4,
+                    patch_size= patch_size,
+                    cnn_ratio = cnn_ratio,
                     learn_pos_emb=True,
-                    embed_dim=512,
-                    depth=6,
-                    decoder_depth=1,
-                    num_heads=4,
-                    mlp_ratio=4,
+                    embed_dim=embed_dim,
+                    depth=depth,
+                    decoder_depth=decoder_depth,
+                    num_heads=num_heads,
+                    mlp_ratio=mlp_ratio,
+                    drop_path=drop_path,
+                    drop_rate=drop_rate,
                 )
 
 
