@@ -41,7 +41,7 @@ data:
       "prcp",
       "tmin",
       "tmax",
-#      "orography",
+      "orography",
     ],
   }
 
@@ -52,8 +52,9 @@ data:
       "t850": "temperature_850",
       "u10": "10m_u_component_of_wind",
       "prcp": "prcp",
-#      "orography": "orography",
+      "tmin": "tmin",
+      "tmax": "tmax",
   }
 
 
-  out_variable: prcp
+  out_variable: ["prcp", "tmin"]
