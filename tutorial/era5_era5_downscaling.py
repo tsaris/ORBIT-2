@@ -290,7 +290,7 @@ def main(device):
         low_res_dir,
         high_res_dir,
         in_vars,
-        out_vars=[out_var_dict[out_variable]],
+        out_vars=[out_var_dict[k] for k in out_variable],
         subsample=1,
         batch_size=batch_size,
         buffer_size=buffer_size,
