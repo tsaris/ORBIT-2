@@ -21,18 +21,18 @@ model:
   superres_mag: 4
   cnn_ratio: 4
   patch_size: 4
-  embed_dim: 256
-  depth: 6
+  embed_dim: 1024
+  depth: 8
   decoder_depth: 2
-  num_heads: 4
+  num_heads: 8
   mlp_ratio: 4
   drop_path: 0.1
   drop_rate: 0.1
 
 # ---------------------------- DATA -------------------------------------------
 data:
-  low_res_dir: "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/1.0_deg/"
-  high_res_dir: "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/0.25_deg/"
+  low_res_dir: "/lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg/"
+  high_res_dir: "/lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg/"
 
   dict_in_variables: {
     'ERA5': [
@@ -58,4 +58,4 @@ data:
   }
 
 
-  out_variable: t2m
+  out_variable: ["t2m"]
