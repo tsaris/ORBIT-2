@@ -14,8 +14,7 @@ def min_max_normalize(data):
     return (data - min_val) / (max_val - min_val)
 
 
-def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, device, index=0):
-    print("reach here",flush=True)
+def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, src, device, index=0):
 
     lat, lon = dm.get_lat_lon()
     extent = [lon.min(), lon.max(), lat.min(), lat.max()]
@@ -24,7 +23,7 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, devic
 
     history = mm.history
 
-    print("out_channel",out_channel,"history",history,flush=True)
+    print("out_channel",out_channel,"in_channel",in_channel,"history",history,flush=True)
 
     if src == "era5":
         variable_with_units = f"{variable} ({ERA5_VAR_TO_UNIT[variable]})"
@@ -46,7 +45,7 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, devic
             pred = mm.forward(x)
             break
         counter += batch_size
-        print("counter",counter,"adj_index",adj_index,flush=True)
+
 
 
     if adj_index is None:
@@ -84,7 +83,11 @@ def visualize_at_index(mm, dm, in_transform, out_transform, variable, src, devic
         print("xx.shape",xx.shape,"in_channel",in_channel,flush=True)
 
         if dm.task == "downscaling":
-            img = in_transform(xx)[in_channel].detach().cpu().numpy()
+            temp = xx[in_channel]
+            
+            temp = temp.repeat(len(out_list),1,1)
+ 
+            img = in_transform(temp)[0].detach().cpu().numpy()
         else:
             img = in_transform(xx[0])[in_channel].detach().cpu().numpy()
         if src == "era5":
