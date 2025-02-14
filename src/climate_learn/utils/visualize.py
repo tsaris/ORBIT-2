@@ -90,7 +90,10 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
             img = in_transform(temp)[0].detach().cpu().numpy()
         else:
             img = in_transform(xx[0])[in_channel].detach().cpu().numpy()
+
         if src == "era5":
+            img = np.flip(img, 0)
+        elif src == "prism":
             img = np.flip(img, 0)
 
 
@@ -106,7 +109,8 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     ppred = ppred[out_channel].detach().cpu().numpy()
     if src == "era5":
         ppred = np.flip(ppred, 0)
-
+    elif src == "prism":
+        ppred = np.flip(ppred, 0)
 
     ppred_min = np.min(ppred)
     ppred_max = np.max(ppred)
@@ -126,6 +130,9 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     yy = yy[out_channel].detach().cpu().numpy()
     if src == "era5":
         yy = np.flip(yy, 0)
+    elif src == "prism":
+        yy = np.flip(yy, 0)
+
 
     print("ground truth yy.shape",yy.shape,"extent",extent,flush=True)
 
