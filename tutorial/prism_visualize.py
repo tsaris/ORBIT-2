@@ -130,7 +130,7 @@ data_module = cl.data.IterDataModule(
     low_res_dir, 
     high_res_dir,
     in_vars,
-    out_vars=[out_var_dict[out_variable]],
+    out_vars=[out_var_dict[k] for k in out_variable],
     subsample=1,
     batch_size=batch_size,
     buffer_size=buffer_size,
@@ -138,6 +138,11 @@ data_module = cl.data.IterDataModule(
 ).to(device)
 
 data_module.setup()
+
+
+temp = [out_var_dict[k] for k in out_variable]
+
+print("temp is ",temp,flush=True)
 
 
 # Set up deep learning model
@@ -192,9 +197,10 @@ model.eval()
 cl.utils.visualize.visualize_at_index(
     model,
     data_module,
+    out_list=out_variable,
     in_transform=denorm,
     out_transform=denorm,
-    variable="prcp",
+    variable="tmin",
     src="prism",
     device = device,
     index=0  # visualize the first sample of the test set
