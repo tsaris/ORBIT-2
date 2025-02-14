@@ -105,7 +105,6 @@ class IterDataModule(torch.nn.Module):
 
         self.transforms = self.get_normalize(inp_root_dir, in_vars)
         self.output_transforms = self.get_normalize(out_root_dir, out_vars)
-
         self.data_train: Optional[IterableDataset] = None
         self.data_val: Optional[IterableDataset] = None
         self.data_test: Optional[IterableDataset] = None
@@ -171,7 +170,7 @@ class IterDataModule(torch.nn.Module):
     def get_out_transforms(self):
         out_transforms = {}
         for key in self.output_transforms.keys():
-            if key in ("2m_temperature_extreme_mask"):
+            if key == "2m_temperature_extreme_mask":
                 continue
             out_transforms[key] = self.output_transforms[key]
         return out_transforms
