@@ -186,27 +186,16 @@ class PERCEPTUAL(Metric):
         """
         return perceptual(self.loss_fn,self.model, pred, target)
 
-
-@register("quantile")
-class QUANTILE(Metric):
-    """Computes quantile loss."""
+@register("imagegradient")
+class IMAGEGRADIENT(Metric):
+    """Computes image gradient error."""
 
     def __call__(
         self,
         pred: Union[torch.FloatTensor, torch.DoubleTensor],
         target: Union[torch.FloatTensor, torch.DoubleTensor],
     ) -> Union[torch.FloatTensor, torch.DoubleTensor]:
-        r"""
-        .. highlight:: python
-
-        :param pred: The predicted values of shape [B,C,H,W].
-        :type pred: torch.FloatTensor|torch.DoubleTensor
-        :param target: The ground truth target values of shape [B,C,H,W].
-        :type target: torch.FloatTensor|torch.DoubleTensor
-
-        :rtype: torch.FloatTensor|torch.DoubleTensor
-        """
-        return lat_weighted_quantile(pred, target, self.aggregate_only)
+        return image_gradient(pred, target)
 
 
 
