@@ -381,7 +381,7 @@ def main(device):
 
 
     optimizer = cl.load_optimizer(
-	model, "adamw", {"lr": 1e-4, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
+	model, "adamw", {"lr": 5e-5, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
     )
 
     scheduler = cl.load_lr_scheduler(
@@ -389,9 +389,9 @@ def main(device):
 	optimizer,
 	{
 	    "warmup_epochs": 2,  
-	    "max_epochs": 50,
-	    "warmup_start_lr": 1e-8,
-	    "eta_min": 1e-8,
+	    "max_epochs": args.max_epochs,
+	    "warmup_start_lr": 1e-7,
+	    "eta_min": 1e-7,
 	},
     )
 

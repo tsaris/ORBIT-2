@@ -6,7 +6,7 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
 #SBATCH -t 02:00:00
-#SBATCH -q debug
+#SBATCH -p batch
 #SBATCH -o flash-%j.out
 #SBATCH -e flash-%j.out
 
