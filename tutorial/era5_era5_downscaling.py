@@ -155,11 +155,18 @@ def main(device):
     parser.add_argument("--max_epochs", type=int, default=50)
     parser.add_argument("--patience", type=int, default=5)
     parser.add_argument("--checkpoint", default=None)
+    parser.add_argument("--pretrain", default=None)
+
     args = parser.parse_args()
 
 
     if world_rank==0:
         print("args is",args,flush=True)
+
+
+    #if both checkpoint and pretrain are available, use checkpoint
+    if args.checkpoint is not None and args.pretrain is not None:
+        args.pretrain = None
 
     # Set up data
     variables = [
@@ -219,7 +226,6 @@ def main(device):
 
 
     #load model checkpoint
-
     if args.checkpoint is not None:
         if os.path.exists(args.checkpoint):
             print("model resume from checkpoint",args.checkpoint," Checkpoint path found.",flush=True)
@@ -236,7 +242,15 @@ def main(device):
 
             sys.exit("checkpoint path does not exist")
 
+    #load pretrained model
+    if args.pretrain is not None:
+        if os.path.exists(args.pretrain):
+            print("load pretrained model",args.pretrain," Pretrain path found.",flush=True)
+            load_pretrained_weights(model,pretrain,device)  
+        else:
+            print("resume from pretrained model was set to True. But the pretrained model path does not exist.",flush=True)
 
+            sys.exit("pretrain path does not exist")
 
 
 
