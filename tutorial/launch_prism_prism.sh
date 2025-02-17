@@ -6,10 +6,14 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
 <<<<<<< HEAD
+<<<<<<< HEAD
 #SBATCH -t 00:30:00
 #SBATCH -p batch
 =======
 #SBATCH -t 01:00:00
+=======
+#SBATCH -t 00:20:00
+>>>>>>> 7d3f6fd (change launch script)
 #SBATCH -q debug
 >>>>>>> ac4fb25 (fix bug when image size does not divide patch size. Add training script for PRISM)
 #SBATCH -o flash-%j.out
@@ -49,4 +53,4 @@ export OMP_NUM_THREADS=7
 export PYTHONPATH=$PWD:$PYTHONPATH
 
 time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-python ./prism_prism_downscaling.py --max_epochs 30 /lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/prism-superres/10.0_arcmin/ /lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/prism-superres/2.5_arcmin/ res_slimvit prcp 
+python ./prism_prism_downscaling.py ../configs/prism_prism.yaml
