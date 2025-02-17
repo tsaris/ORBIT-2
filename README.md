@@ -32,4 +32,8 @@ You can also request multiple nodes by changing `#SBATCH --nodes=1`  and set --n
 **Available Training Data**
 ERA5 5.6 degree "/lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg/" 
 ERA5 1.4 degree "/lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg/"
-ERA5 0.25 degree "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-wb2/0.25_deg" 
+ERA5 1.0 degree "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/1.0_deg/"
+ERA5 0.25 degree "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/0.25_deg/" 
+PRISM 16 km "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/prism-superres/10.0_arcmin/"
+PRISM 4 km "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/prism-superres/2.5_arcmin/"
+

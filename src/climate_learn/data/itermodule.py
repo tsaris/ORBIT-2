@@ -2,14 +2,13 @@
 import copy
 import glob
 import os
-from typing import Dict, Optional
+from typing import Dict, Optional, OrderedDict
 
 # Third party
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, IterableDataset
 from torchvision.transforms import transforms
-import pytorch_lightning as pl
 
 # Local application
 from .iterdataset import (
@@ -20,9 +19,11 @@ from .iterdataset import (
     IndividualDataIter,
     ShuffleIterableDataset,
 )
+from .processing.era5_constants import PRECIP_VARIABLES
+from .precipmodule import LogTransform
 
 
-class IterDataModule(pl.LightningDataModule):
+class IterDataModule(torch.nn.Module):
     """ClimateLearn's iter data module interface. Encapsulates dataset/task-specific
     data modules."""
 
@@ -47,7 +48,17 @@ class IterDataModule(pl.LightningDataModule):
         pin_memory=False,
     ):
         super().__init__()
-        self.save_hyperparameters(logger=False)
+        self.task = task
+        self.inp_root_dir = inp_root_dir
+        self.out_root_dir = out_root_dir
+        self.in_vars = in_vars
+        self.out_vars = out_vars
+        self.subsample = subsample
+        self.buffer_size = buffer_size
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.pin_memory = pin_memory
+
         if task in ("direct-forecasting", "iterative-forecasting"):
             self.dataset_caller = DirectForecast
             self.dataset_arg = {
@@ -94,62 +105,68 @@ class IterDataModule(pl.LightningDataModule):
 
         self.transforms = self.get_normalize(inp_root_dir, in_vars)
         self.output_transforms = self.get_normalize(out_root_dir, out_vars)
-
         self.data_train: Optional[IterableDataset] = None
         self.data_val: Optional[IterableDataset] = None
         self.data_test: Optional[IterableDataset] = None
 
     def get_lat_lon(self):
-        lat = np.load(os.path.join(self.hparams.out_root_dir, "lat.npy"))
-        lon = np.load(os.path.join(self.hparams.out_root_dir, "lon.npy"))
+        lat = np.load(os.path.join(self.out_root_dir, "lat.npy"))
+        lon = np.load(os.path.join(self.out_root_dir, "lon.npy"))
         return lat, lon
 
     def get_data_variables(self):
-        out_vars = copy.deepcopy(self.hparams.out_vars)
+        out_vars = copy.deepcopy(self.out_vars)
         if "2m_temperature_extreme_mask" in out_vars:
             out_vars.remove("2m_temperature_extreme_mask")
-        return self.hparams.in_vars, out_vars
+        return self.in_vars, out_vars
 
     def get_data_dims(self):
-        in_lat = len(np.load(os.path.join(self.hparams.inp_root_dir, "lat.npy")))
-        in_lon = len(np.load(os.path.join(self.hparams.inp_root_dir, "lon.npy")))
-        out_lat = len(np.load(os.path.join(self.hparams.out_root_dir, "lat.npy")))
-        out_lon = len(np.load(os.path.join(self.hparams.out_root_dir, "lon.npy")))
+        in_lat = len(np.load(os.path.join(self.inp_root_dir, "lat.npy")))
+        in_lon = len(np.load(os.path.join(self.inp_root_dir, "lon.npy")))
+        out_lat = len(np.load(os.path.join(self.out_root_dir, "lat.npy")))
+        out_lon = len(np.load(os.path.join(self.out_root_dir, "lon.npy")))
 
         forecasting_tasks = [
             "direct-forecasting",
             "iterative-forecasting",
             "continuous-forecasting",
         ]
-        if self.hparams.task in forecasting_tasks:
+        if self.task in forecasting_tasks:
             in_size = torch.Size(
                 [
-                    self.hparams.batch_size,
-                    self.hparams.history,
-                    len(self.hparams.in_vars),
+                    self.batch_size,
+                    self.history,
+                    len(self.in_vars),
                     out_lat,
                     out_lon,
                 ]
             )
-        elif self.hparams.task == "downscaling":
+        elif self.task == "downscaling":
             in_size = torch.Size(
-                [self.hparams.batch_size, len(self.hparams.in_vars), in_lat, in_lon]
+                [self.batch_size, len(self.in_vars), in_lat, in_lon]
             )
         ##TODO: change out size
-        out_vars = copy.deepcopy(self.hparams.out_vars)
+        out_vars = copy.deepcopy(self.out_vars)
         if "2m_temperature_extreme_mask" in out_vars:
             out_vars.remove("2m_temperature_extreme_mask")
-        out_size = torch.Size([self.hparams.batch_size, len(out_vars), out_lat, out_lon])
+        out_size = torch.Size([self.batch_size, len(out_vars), out_lat, out_lon])
         return in_size, out_size
 
     def get_normalize(self, root_dir, variables):
         normalize_mean = dict(np.load(os.path.join(root_dir, "normalize_mean.npz")))
         normalize_std = dict(np.load(os.path.join(root_dir, "normalize_std.npz")))
-        return {
-            var: transforms.Normalize(normalize_mean[var][0], normalize_std[var][0])
-            for var in variables
-        }
-
+        normed = OrderedDict()
+        for var in variables:
+            if var in PRECIP_VARIABLES:
+                if var == 'total_precipitation':
+                    m2mm=hour2day=True
+                else:
+                    m2mm=hour2day=False
+                normed[var] = LogTransform(m2mm, hour2day) 
+            else:
+                normed[var] = transforms.Normalize(normalize_mean[var][0], normalize_std[var][0])
+        return normed
+ 
     def get_out_transforms(self):
         out_transforms = {}
         for key in self.output_transforms.keys():
@@ -159,10 +176,10 @@ class IterDataModule(pl.LightningDataModule):
         return out_transforms
 
     def get_climatology(self, split="val"):
-        path = os.path.join(self.hparams.out_root_dir, split, "climatology.npz")
+        path = os.path.join(self.out_root_dir, split, "climatology.npz")
         clim_dict = np.load(path)
         new_clim_dict = {}
-        for var in self.hparams.out_vars:
+        for var in self.out_vars:
             if var == "2m_temperature_extreme_mask":
                 continue
             new_clim_dict[var] = torch.from_numpy(
@@ -180,17 +197,17 @@ class IterDataModule(pl.LightningDataModule):
                             NpyReader(
                                 inp_file_list=self.inp_lister_train,
                                 out_file_list=self.out_lister_train,
-                                variables=self.hparams.in_vars,
-                                out_variables=self.hparams.out_vars,
+                                variables=self.in_vars,
+                                out_variables=self.out_vars,
                                 shuffle=True,
                             ),
                             **self.dataset_arg,
                         ),
                         transforms=self.transforms,
                         output_transforms=self.output_transforms,
-                        subsample=self.hparams.subsample,
+                        subsample=self.subsample,
                     ),
-                    buffer_size=self.hparams.buffer_size,
+                    buffer_size=self.buffer_size,
                 )
 
                 self.data_val = IndividualDataIter(
@@ -198,15 +215,15 @@ class IterDataModule(pl.LightningDataModule):
                         NpyReader(
                             inp_file_list=self.inp_lister_val,
                             out_file_list=self.out_lister_val,
-                            variables=self.hparams.in_vars,
-                            out_variables=self.hparams.out_vars,
+                            variables=self.in_vars,
+                            out_variables=self.out_vars,
                             shuffle=False,
                         ),
                         **self.dataset_arg,
                     ),
                     transforms=self.transforms,
                     output_transforms=self.output_transforms,
-                    subsample=self.hparams.subsample,
+                    subsample=self.subsample,
                 )
 
                 self.data_test = IndividualDataIter(
@@ -214,15 +231,15 @@ class IterDataModule(pl.LightningDataModule):
                         NpyReader(
                             inp_file_list=self.inp_lister_test,
                             out_file_list=self.out_lister_test,
-                            variables=self.hparams.in_vars,
-                            out_variables=self.hparams.out_vars,
+                            variables=self.in_vars,
+                            out_variables=self.out_vars,
                             shuffle=False,
                         ),
                         **self.dataset_arg,
                     ),
                     transforms=self.transforms,
                     output_transforms=self.output_transforms,
-                    subsample=self.hparams.subsample,
+                    subsample=self.subsample,
                 )
         else:
             self.data_test = IndividualDataIter(
@@ -230,46 +247,46 @@ class IterDataModule(pl.LightningDataModule):
                     NpyReader(
                         inp_file_list=self.inp_lister_test,
                         out_file_list=self.out_lister_test,
-                        variables=self.hparams.in_vars,
-                        out_variables=self.hparams.out_vars,
+                        variables=self.in_vars,
+                        out_variables=self.out_vars,
                         shuffle=False,
                     ),
                     **self.dataset_arg,
                 ),
                 transforms=self.transforms,
                 output_transforms=self.output_transforms,
-                subsample=self.hparams.subsample,
+                subsample=self.subsample,
             )
 
     def train_dataloader(self):
         return DataLoader(
             self.data_train,
-            batch_size=self.hparams.batch_size,
+            batch_size=self.batch_size,
             drop_last=False,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
             collate_fn=self.collate_fn,
         )
 
     def val_dataloader(self):
         return DataLoader(
             self.data_val,
-            batch_size=self.hparams.batch_size,
+            batch_size=self.batch_size,
             shuffle=False,
             drop_last=False,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
             collate_fn=self.collate_fn,
         )
 
     def test_dataloader(self):
         return DataLoader(
             self.data_test,
-            batch_size=self.hparams.batch_size,
+            batch_size=self.batch_size,
             shuffle=False,
             drop_last=False,
-            num_workers=self.hparams.num_workers,
-            pin_memory=self.hparams.pin_memory,
+            num_workers=self.num_workers,
+            pin_memory=self.pin_memory,
             collate_fn=self.collate_fn,
         )
 

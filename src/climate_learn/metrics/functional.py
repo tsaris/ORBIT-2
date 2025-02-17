@@ -1,6 +1,8 @@
 # Standard library
 from typing import Optional, Union
 
+from sympy import true
+
 # Local application
 from .utils import Pred, handles_probabilistic
 
@@ -8,6 +10,7 @@ from .utils import Pred, handles_probabilistic
 import torch
 import torch.nn.functional as F
 import lpips
+from torchmetrics.functional.image import image_gradients
 from einops import repeat
 import torchvision
 
@@ -26,7 +29,6 @@ def perceptual(
 
 
     error = F.l1_loss(pred, target) + 0.5*torch.mean(loss_fn(pred,target))
-
 
     return error
 
@@ -53,6 +55,46 @@ def lat_weighted_quantile(
     loss = torch.abs(losses).mean() 
     return loss
 
+@handles_probabilistic
+def image_gradient(
+    pred: Pred,
+    target: Union[torch.FloatTensor, torch.DoubleTensor],
+    aggregate_only: bool = False,
+    lat_weights: Optional[Union[torch.FloatTensor, torch.DoubleTensor]] = None,
+) -> Union[torch.FloatTensor, torch.DoubleTensor]:
+    """
+    Computes the image gradient loss between the ground truth and predicted images.
+
+    Args:
+        target (torch.Tensor): Ground truth image tensor of shape (B, C, V, H, W) or (B, V, H, W).
+        pred (torch.Tensor): Predicted image tensor with the same shape as `image`.
+    Returns:
+        dict: A dictionary containing the gradient loss.
+    """
+
+    mse_error =  torch.mean((pred - target).square())
+    loss = mse_error + .1 *torch.mean(image_gradient_fn(pred, target))
+    return loss
+
+@handles_probabilistic
+def image_gradient_fn(pred:Pred, 
+                      target: Union[torch.BFloat16Tensor, torch.FloatTensor, torch.DoubleTensor]
+                      ):
+    
+    # Ensure images are at least 4D (batch, V, H, W)
+    if pred.dim() == 5:
+        pred = pred.flatten(0, 1)  # Merge batch and channel dimensions
+
+    if target.dim() == 5:
+        target = target.flatten(0, 1)
+
+    # Compute image gradients
+    dy, dx = image_gradients(target)
+    hat_dy, hat_dx = image_gradients(pred)
+
+    # Compute gradient difference loss: add latitude weight if needed
+    error = torch.mean(torch.abs(dx - hat_dx) + torch.abs(dy - hat_dy))
+    return error
 
 @handles_probabilistic
 def mse(
@@ -62,6 +104,7 @@ def mse(
     lat_weights: Optional[Union[torch.FloatTensor, torch.DoubleTensor]] = None,
 ) -> Union[torch.FloatTensor, torch.DoubleTensor]:
     error = (pred - target).square()
+    #print('during  mse with error', error.dtype, pred.dtype, target.dtype)
     if lat_weights is not None:
         error = error * lat_weights
     per_channel_losses = error.mean([0, 2, 3])

@@ -1,11 +1,12 @@
 # Standard library
+
 from typing import Any, Callable, Dict, Iterable, Optional, Union
 from functools import partial
 import warnings
 
 # Local application
 from ..data import IterDataModule
-from ..models import LitModule, MODEL_REGISTRY
+from ..models import MODEL_REGISTRY
 from ..models.hub import (
     Climatology,
     Interpolation,
@@ -53,9 +54,19 @@ def load_model_module(
         raise RuntimeError("Please specify 'architecture' or 'model'")
     elif architecture:
         print(f"Loading architecture: {architecture}")
-        model, optimizer, lr_scheduler = load_architecture(
-            task, data_module, architecture
+        model  = load_architecture(
+            task, data_module, architecture, **model_kwargs
         )
+
+
+
+
+    if torch.distributed.get_rank()==0:
+        print("Inside load_model_module model_kwargs",model_kwargs,flush=True)
+
+
+
+
     elif isinstance(model, str):
         print(f"Loading model: {model}")
         model_cls = MODEL_REGISTRY.get(model, None)
@@ -198,19 +209,20 @@ def load_model_module(
             "'test_target_transform' must be an iterable of strings/callables,"
             " or None"
         )
+
     # Instantiate Lightning Module
-    model_module = LitModule(
-        model,
-        optimizer,
-        lr_scheduler,
-        train_loss,
-        val_losses,
-        test_losses,
-        train_transform,
-        val_transforms,
-        test_transforms,
-    )
-    return model_module
+    #model_module = LitModule(
+    #    model,
+    #    optimizer,
+    #    lr_scheduler,
+    #    train_loss,
+    #    val_losses,
+    #    test_losses,
+    #    train_transform,
+    #    val_transforms,
+    #    test_transforms,
+    #)
+    return model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms
 
 
 load_forecasting_module = partial(
@@ -239,7 +251,7 @@ load_downscaling_module = partial(
     load_model_module,
     task="downscaling",
     train_loss="mse",
-    val_loss=["rmse", "pearson", "mean_bias", "mae"],
+    val_loss=["rmse", "pearson", "mean_bias", "mse"],
     test_loss=["rmse", "pearson", "mean_bias"],
     train_target_transform=None,
     val_target_transform=["denormalize", "denormalize", "denormalize", None],
@@ -247,7 +259,7 @@ load_downscaling_module = partial(
 )
 
 
-def load_architecture(task, data_module, architecture):
+def load_architecture(task, data_module, architecture, superres_mag=4,cnn_ratio=4, patch_size=2,embed_dim=256,depth=6,decoder_depth=1,num_heads=4,mlp_ratio=4,drop_path=0.1,drop_rate=0.1):
     in_vars, out_vars = get_data_variables(data_module)
     in_shape, out_shape = get_data_dims(data_module)
 
@@ -322,25 +334,21 @@ def load_architecture(task, data_module, architecture):
             model = Interpolation((out_height, out_width), interpolation_mode)
             optimizer = lr_scheduler = None
         else:
-            if architecture == "resnet":
-                backbone = ResNet(in_channels, out_channels, n_blocks=28)
-            elif architecture == "unet":
-                backbone = Unet(
-                    in_channels, out_channels, ch_mults=[1, 1, 2], n_blocks=4
-                )
-            elif architecture == "vit":
+            if architecture == "vit":
                 backbone = VisionTransformer(
                     (out_height, out_width),
                     in_channels,
                     out_channels,
                     history=1,
-                    patch_size=2,
+                    patch_size=patch_size,
                     learn_pos_emb=True,
-                    embed_dim=256,
-                    depth=6,
-                    decoder_depth=1,
-                    num_heads=4,
-                    mlp_ratio=4,
+                    embed_dim=embed_dim,
+                    depth=depth,
+                    decoder_depth=decoder_depth,
+                    num_heads=num_heads,
+                    mlp_ratio=mlp_ratio, 
+                    drop_path=drop_path,    
+                    drop_rate=drop_rate,
                 )
 
             elif architecture == "res_slimvit":
@@ -348,16 +356,18 @@ def load_architecture(task, data_module, architecture):
                     (in_height, in_width),
                     in_channels,
                     out_channels,
-                    superres_factor = 4,
+                    superres_mag = superres_mag,
                     history=1,
-                    patch_size=2,
-                    cnn_ratio = 4,
+                    patch_size= patch_size,
+                    cnn_ratio = cnn_ratio,
                     learn_pos_emb=True,
-                    embed_dim=256,
-                    depth=6,
-                    decoder_depth=1,
-                    num_heads=4,
-                    mlp_ratio=4,
+                    embed_dim=embed_dim,
+                    depth=depth,
+                    decoder_depth=decoder_depth,
+                    num_heads=num_heads,
+                    mlp_ratio=mlp_ratio,
+                    drop_path=drop_path,
+                    drop_rate=drop_rate,
                 )
 
 
@@ -365,28 +375,14 @@ def load_architecture(task, data_module, architecture):
                 raise_not_impl()
 
             if architecture == "res_slimvit":
-                model = nn.Sequential(
-                    backbone
-                )
+                model = backbone
+                
             else:
                 model = nn.Sequential(
                     Interpolation((out_height, out_width), "bilinear"), backbone
                 )
 
-            optimizer = load_optimizer(
-                model, "adamw", {"lr": 1e-4, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
-            )
-            lr_scheduler = load_lr_scheduler(
-                "linear-warmup-cosine-annealing",
-                optimizer,
-                {
-                    "warmup_epochs": 2,
-                    "max_epochs": 50,
-                    "warmup_start_lr": 1e-8,
-                    "eta_min": 1e-8,
-                },
-            )
-    return model, optimizer, lr_scheduler
+    return model
 
 
 def load_optimizer(net: torch.nn.Module, optim: str, optim_kwargs: Dict[str, Any] = {}):

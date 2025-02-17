@@ -4,12 +4,22 @@ from typing import Callable, Optional, Union
 # Local application
 from .utils import MetricsMetaInfo, register
 from .functional import *
-
-# Third party
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp.wrap import wrap, transformer_auto_wrap_policy
+from torch.distributed.fsdp import MixedPrecision
+from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
+checkpoint_wrapper,
+CheckpointImpl,
+apply_activation_checkpointing,
+)
+import functools
+from torchvision.models import vgg16
 import numpy as np
 import torch
-
-
+import os
+from torch.nn import Sequential
+import lpips
+from lpips import NetLinLayer 
 class Metric:
     """Parent class for all ClimateLearn metrics."""
 
@@ -113,7 +123,49 @@ class PERCEPTUAL(Metric):
     def __init__(self, device, model, aggregate_only: bool = False, metainfo: Optional[MetricsMetaInfo] = None):
         self.loss_fn = lpips.LPIPS(net='vgg').to(device) # best forward scores
         self.model = model
-        print("inside PERCEPTUAL","self.loss_fn",self.loss_fn,flush=True)
+
+        for param in self.loss_fn.parameters():
+            param.requires_grad = False
+
+
+        local_rank = int(os.environ['SLURM_LOCALID'])
+
+
+
+        #bfloat16 policy
+        bfloatPolicy = MixedPrecision(
+            param_dtype=torch.bfloat16,
+            # Gradient communication precision.
+            reduce_dtype=torch.bfloat16,
+            # Buffer precision.
+            buffer_dtype=torch.bfloat16,
+        )
+
+
+        auto_wrap_policy = functools.partial(
+            transformer_auto_wrap_policy,
+            transformer_layer_cls={
+               Sequential   # < ---- Your Transformer layer class
+            },
+        )
+
+
+        check_fn = lambda submodule: isinstance(submodule, Sequential)
+
+
+
+        self.loss_fn = FSDP(self.loss_fn, device_id = local_rank, process_group= None,sync_module_states=True, sharding_strategy=torch.distributed.fsdp.ShardingStrategy.FULL_SHARD,auto_wrap_policy = None, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False)
+
+        #activation checkpointing
+        apply_activation_checkpointing(
+            self.loss_fn, checkpoint_wrapper_fn=checkpoint_wrapper, check_fn=check_fn
+        )
+
+
+
+
+        if torch.distributed.get_rank()==0:
+            print("inside PERCEPTUAL after FSDP","self.loss_fn",self.loss_fn,flush=True)
 
         super().__init__(aggregate_only, metainfo)
 
@@ -134,27 +186,16 @@ class PERCEPTUAL(Metric):
         """
         return perceptual(self.loss_fn,self.model, pred, target)
 
-
-@register("quantile")
-class QUANTILE(Metric):
-    """Computes quantile loss."""
+@register("imagegradient")
+class IMAGEGRADIENT(Metric):
+    """Computes image gradient error."""
 
     def __call__(
         self,
         pred: Union[torch.FloatTensor, torch.DoubleTensor],
         target: Union[torch.FloatTensor, torch.DoubleTensor],
     ) -> Union[torch.FloatTensor, torch.DoubleTensor]:
-        r"""
-        .. highlight:: python
-
-        :param pred: The predicted values of shape [B,C,H,W].
-        :type pred: torch.FloatTensor|torch.DoubleTensor
-        :param target: The ground truth target values of shape [B,C,H,W].
-        :type target: torch.FloatTensor|torch.DoubleTensor
-
-        :rtype: torch.FloatTensor|torch.DoubleTensor
-        """
-        return lat_weighted_quantile(pred, target, self.aggregate_only)
+        return image_gradient(pred, target)
 
 
 

@@ -68,7 +68,11 @@ VAR_TO_UNIT = {
     "potential_vorticity": "K m^2 / (kg s)",
 }
 
+PRECIP_VARIABLES = ["total_precipitation", 'prcp']
+
 DEFAULT_PRESSURE_LEVELS = [50, 250, 500, 600, 700, 850, 925]
+
+SR_PRESSURE_LEVELS = [500, 850]
 
 CONSTANTS = ["orography", "land_sea_mask", "slt", "lattitude", "longitude"]
 
