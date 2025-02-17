@@ -27,7 +27,6 @@ def perceptual(
 
     error = F.l1_loss(pred, target) + 0.5*torch.mean(loss_fn(pred,target))
 
-
     return error
 
 @handles_probabilistic
