@@ -54,54 +54,32 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     if dm.task == "continuous-forecasting":
         xx = xx[:, :-1]
 
-    # Create animation/plot of the input sequence
-    if history > 1:
-        in_fig, in_ax = plt.subplots()
-        in_ax.set_title(f"Input Sequence: {variable_with_units}")
-        in_ax.set_xlabel("Longitude")
-        in_ax.set_ylabel("Latitude")
-        imgs = []
-        for time_step in range(history):
-            img = in_transform(xx[time_step])[in_channel].detach().cpu().numpy()
-            if src == "era5":
-                img = np.flip(img, 0)
-            img = in_ax.imshow(img, cmap=plt.cm.coolwarm, animated=True, extent=extent)
-            imgs.append([img])
-        cax = in_fig.add_axes(
-            [
-                in_ax.get_position().x1 + 0.02,
-                in_ax.get_position().y0,
-                0.02,
-                in_ax.get_position().y1 - in_ax.get_position().y0,
-            ]
-        )
-        in_fig.colorbar(in_ax.get_images()[0], cax=cax)
-        anim = animation.ArtistAnimation(in_fig, imgs, interval=1000, repeat_delay=2000)
-        plt.close()
-    else:
+    print("xx.shape",xx.shape,"in_channel",in_channel,flush=True)
 
-        print("xx.shape",xx.shape,"in_channel",in_channel,flush=True)
-
-        if dm.task == "downscaling":
-            temp = xx[in_channel]
+    if dm.task == "downscaling":
+        temp = xx[in_channel]
             
-            temp = temp.repeat(len(out_list),1,1)
+        temp = temp.repeat(len(out_list),1,1)
  
-            img = in_transform(temp)[0].detach().cpu().numpy()
-        else:
-            img = in_transform(xx[0])[in_channel].detach().cpu().numpy()
+        img = in_transform(temp)[0].detach().cpu().numpy()
+    else:
+        img = in_transform(xx[0])[in_channel].detach().cpu().numpy()
 
-        if src == "era5":
-            img = np.flip(img, 0)
-        elif src == "prism":
-            img = np.flip(img, 0)
+    if src == "era5":
+        img = np.flip(img, 0)
+    elif src == "prism":
+        img = np.flip(img, 0)
 
 
-        visualize_sample(img, extent, f"Input: {variable_with_units}")
-        anim = None
-        plt.show()
-        plt.savefig('input.png')
-        print("input shape",img.shape,flush=True)
+    img_min = np.min(img)
+    img_max = np.max(img)
+
+
+    visualize_sample(img, extent, f"Input: {variable_with_units}",vmin=img_min,vmax=img_max)
+    anim = None
+    plt.show()
+    plt.savefig('input.png')
+    print("input shape",img.shape,flush=True)
 
     # Plot the prediction
     ppred = out_transform(pred[adj_index])
@@ -117,7 +95,7 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
 
 
 
-    visualize_sample(ppred, extent, f"Prediction: {variable_with_units}",vmin=ppred_min,vmax=ppred_max)
+    visualize_sample(ppred, extent, f"Prediction: {variable_with_units}",vmin=img_min,vmax=img_max)
     plt.show()
     plt.savefig('prediction.png')
 
@@ -142,7 +120,7 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
         yy= yy[0:ppred.shape[0],0:ppred.shape[1]]
 
 
-    visualize_sample(yy, extent, f"Ground truth: {variable_with_units}",vmin=ppred_min,vmax=ppred_max)
+    visualize_sample(yy, extent, f"Ground truth: {variable_with_units}",vmin=img_min,vmax=img_max)
     plt.show()
     plt.savefig('groundtruth.png')
 
