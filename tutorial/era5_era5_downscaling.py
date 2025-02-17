@@ -21,6 +21,7 @@ import sys
 import random
 import time
 import numpy as np
+import yaml
 
 # Third party
 import climate_learn as cl
@@ -111,7 +112,12 @@ def training_step(
         
     yhat = net.forward(x)
     yhat = replace_constant(y, yhat, out_variables)
-    losses = train_loss_metric(yhat, y)
+
+    if y.size(dim=2)!=yhat.size(dim=2) or y.size(dim=3)!=yhat.size(dim=3):
+        losses = train_loss_metric(yhat, y[:,:,0:yhat.size(dim=2),0:yhat.size(dim=3)])
+    else:
+
+        losses = train_loss_metric(yhat, y)
     loss_name = getattr(train_loss_metric, "name", "loss")
     if losses.dim() == 0:  # aggregate loss only
         loss = losses
@@ -119,6 +125,7 @@ def training_step(
         loss = losses[-1]
         
     return loss
+
 
 
 def validation_step(
@@ -161,7 +168,12 @@ def evaluate_func(
         if transforms is not None and transforms[i] is not None:
             yhat_ = transforms[i](yhat)
             y_ = transforms[i](y)
-        losses = lf(yhat_, y_)
+
+        if y_.size(dim=2)!=yhat_.size(dim=2) or y_.size(dim=3)!=yhat_.size(dim=3):
+            losses = lf(yhat_, y_[:,:,0:yhat_.size(dim=2),0:yhat_.size(dim=3)])
+        else:
+            losses = lf(yhat_, y_)
+
         loss_name = getattr(lf, "name", f"loss_{i}")
         if losses.dim() == 0:  # aggregate loss
             loss_dict[f"{stage}/{loss_name}:agggregate"] = losses
@@ -194,53 +206,72 @@ def main(device):
 
     print("world_size",world_size,"world_rank",world_rank,"local_rank",local_rank,flush=True)
 
+    config_path = sys.argv[1]
 
-    parser = ArgumentParser()
-    parser.add_argument("era5_low_res_dir")
-    parser.add_argument("era5_high_res_dir")
-    parser.add_argument("preset", choices=["resnet", "unet", "vit","res_slimvit"])
-    parser.add_argument(
-        "variable", choices=["t2m", "z500", "t850","u10"], help="The variable to predict."
-    )
-    parser.add_argument("--summary_depth", type=int, default=1)
-    parser.add_argument("--max_epochs", type=int, default=50)
-    parser.add_argument("--patience", type=int, default=5)
-    parser.add_argument("--checkpoint", default=None)
-    parser.add_argument("--pretrain", default=None)
+    if world_rank==0:
+        print("config_path",config_path,flush=True)
 
-    args = parser.parse_args()
+    conf = yaml.load(open(config_path,'r'),Loader=yaml.FullLoader)
+
+    max_epochs=conf['trainer']['max_epochs']
+    checkpoint_path = conf['trainer']['checkpoint']
+    batch_size = conf['trainer']['batch_size']
+    num_workers = conf['trainer']['num_workers']
+    buffer_size = conf['trainer']['buffer_size']
+    
+    pretrain_path = conf['trainer']['pretrain']
+    low_res_dir = conf['data']['low_res_dir']
+    high_res_dir = conf['data']['high_res_dir']
+    preset = conf['model']['preset']
+    out_variable = conf['data']['out_variable']
+    dict_in_variables = conf['data']['dict_in_variables']
+    out_var_dict = conf['data']['out_var_dict']
+
+    lr = float(conf['model']['lr'])
+    beta_1 = float(conf['model']['beta_1'])
+    beta_2 = float(conf['model']['beta_2'])
+    weight_decay = float(conf['model']['weight_decay'])
+    warmup_epochs =  conf['model']['warmup_epochs']
+    warmup_start_lr =  float(conf['model']['warmup_start_lr'])
+    eta_min =  float(conf['model']['eta_min'])
+
+    superres_mag = conf['model']['superres_mag']
+    cnn_ratio = conf['model']['cnn_ratio']
+    patch_size =  conf['model']['patch_size']
+    embed_dim = conf['model']['embed_dim']
+    depth = conf['model']['depth']
+    decoder_depth = conf['model']['decoder_depth']
+    num_heads = conf['model']['num_heads']
+    mlp_ratio = conf['model']['mlp_ratio']
+    drop_path = conf['model']['drop_path']
+    drop_rate = conf['model']['drop_rate']
+
+    if world_rank==0:
+        print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir,"preset",preset," ",out_variable," ",out_var_dict,"lr",lr,"beta_1",beta_1,"beta_2",beta_2,"weight_decay",weight_decay,"warmup_epochs",warmup_epochs,"warmup_start_lr",warmup_start_lr,"eta_min",eta_min,"superres_mag",superres_mag,"cnn_ratio",cnn_ratio,"patch_size",patch_size,"embed_dim",embed_dim,"depth",depth,"decoder_depth",decoder_depth,"num_heads",num_heads,"mlp_ratio",mlp_ratio,"drop_path",drop_path,"drop_rate",drop_rate,"batch_size",batch_size,"num_workers",num_workers,"buffer_size",buffer_size,flush=True)
+
+
+    model_kwargs = {'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate}
 
 
     if world_rank==0:
-        print("args is",args,flush=True)
+        print("model_kwargs",model_kwargs,flush=True)
+
+
+    if preset!="vit" and preset!="res_slimvit":
+        print("Only supports vit or residual slim vit training.",flush=True)
+        sys.exit("Not vit or res_slimvit architecture")
 
 
     #if both checkpoint and pretrain are available, use checkpoint
-    if args.checkpoint is not None and args.pretrain is not None:
-        args.pretrain = None
+    if checkpoint_path is not None and pretrain_path is not None:
+        pretrain_path = None
 
     # Set up data
-    variables = [
-        "land_sea_mask",
-        "orography",
-        "lattitude",
-    #    "toa_incident_solar_radiation",
-        "2m_temperature",
-        "10m_u_component_of_wind",
-        "10m_v_component_of_wind",
-        "geopotential",
-        "temperature",
-    #    "relative_humidity",
-    #    "specific_humidity",
-    #    "u_component_of_wind",
-    #    "v_component_of_wind",
-    ]
-    out_var_dict = {
-        "t2m": "2m_temperature",
-#        "z500": "geopotential_500",
-#        "t850": "temperature_850",
-#        "u10": "10m_u_component_of_wind"
-    }
+
+
+
+    variables = dict_in_variables["ERA5"]
+    
     in_vars = []
     for var in variables:
         if var in PRESSURE_LEVEL_VARS:
@@ -256,19 +287,19 @@ def main(device):
     #load data module
     data_module = cl.data.IterDataModule(
         "downscaling",
-        args.era5_low_res_dir,
-        args.era5_high_res_dir,
+        low_res_dir,
+        high_res_dir,
         in_vars,
-        out_vars=[out_var_dict[args.variable]],
+        out_vars=[out_var_dict[out_variable]],
         subsample=1,
-        batch_size=64,
-        buffer_size=400,
-        num_workers=1,
+        batch_size=batch_size,
+        buffer_size=buffer_size,
+        num_workers=num_workers,
     ).to(device)
     data_module.setup()
 
     # Set up deep learning model
-    model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms = cl.load_downscaling_module(device,data_module=data_module, architecture=args.preset)
+    model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms = cl.load_downscaling_module(device,data_module=data_module, architecture=preset,model_kwargs=model_kwargs)
   
     if dist.get_rank()==0:
         print("train_loss",train_loss,"train_transform",train_transform,"val_losses",val_losses,"val_transforms",val_transforms,flush=True)
@@ -277,14 +308,14 @@ def main(device):
 
 
     #load model checkpoint
-    if args.checkpoint is not None:
-        if os.path.exists(args.checkpoint):
-            print("model resume from checkpoint",args.checkpoint," Checkpoint path found.",flush=True)
+    if checkpoint_path is not None:
+        if os.path.exists(checkpoint_path):
+            print("model resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
 
             #map_location = 'cuda:'+str(device)
             map_location = 'cpu'
 
-            checkpoint = torch.load(args.checkpoint,map_location=map_location)
+            checkpoint = torch.load(checkpoint_path,map_location=map_location)
             model.load_state_dict(checkpoint['model_state_dict'])
 
             del checkpoint
@@ -294,10 +325,10 @@ def main(device):
             sys.exit("checkpoint path does not exist")
 
     #load pretrained model
-    if args.pretrain is not None:
-        if os.path.exists(args.pretrain):
-            print("load pretrained model",args.pretrain," Pretrain path found.",flush=True)
-            load_pretrained_weights(model,args.pretrain,device)  
+    if pretrain_path is not None:
+        if os.path.exists(pretrain_path):
+            print("load pretrained model",pretrain_path," Pretrain path found.",flush=True)
+            load_pretrained_weights(model,pretrain_path,device)  
         else:
             print("resume from pretrained model was set to True. But the pretrained model path does not exist.",flush=True)
 
@@ -306,11 +337,11 @@ def main(device):
 
 
     seed_everything(0)
-    default_root_dir = f"{args.preset}_downscaling_{args.variable}"
+    default_root_dir = f"{preset}_downscaling_{out_variable}"
 
 
     #set up layer wrapping
-    if args.preset =="vit" or args.preset=="res_slimvit":
+    if preset =="vit" or preset=="res_slimvit":
    
         auto_wrap_policy = functools.partial(
             transformer_auto_wrap_policy,
@@ -320,29 +351,6 @@ def main(device):
         )
 
         check_fn = lambda submodule: isinstance(submodule, Block)  or isinstance(submodule,Sequential)
-
-
-
-    elif args.preset =="unet":
-        auto_wrap_policy = functools.partial(
-            transformer_auto_wrap_policy,
-            transformer_layer_cls={
-                UpBlock,DownBlock,MiddleBlock  # < ---- Your Transformer layer class
-            },
-        )
-
-        check_fn = lambda submodule: isinstance(submodule, UpBlock) or isinstance(submodule, DownBlock) or isinstance(submodule, MiddleBlock)
-
-
-
-    else: #resnet
-        auto_wrap_policy = functools.partial(
-            transformer_auto_wrap_policy,
-            transformer_layer_cls={
-                ResidualBlock  # < ---- Your Transformer layer class
-            },
-        )
-        check_fn = lambda submodule: isinstance(submodule, ResidualBlock)
 
 
 
@@ -381,30 +389,30 @@ def main(device):
 
 
     optimizer = cl.load_optimizer(
-	model, "adamw", {"lr": 5e-5, "weight_decay": 1e-5, "betas": (0.9, 0.99)}
+	model, "adamw", {"lr": lr, "weight_decay": weight_decay, "betas": (beta_1, beta_2)}
     )
 
     scheduler = cl.load_lr_scheduler(
 	"linear-warmup-cosine-annealing",
 	optimizer,
 	{
-	    "warmup_epochs": 2,  
-	    "max_epochs": args.max_epochs,
-	    "warmup_start_lr": 1e-7,
-	    "eta_min": 1e-7,
+	    "warmup_epochs": warmup_epochs,  
+	    "max_epochs": max_epochs,
+	    "warmup_start_lr": warmup_start_lr,
+	    "eta_min": eta_min,
 	},
     )
 
 
     epoch_start = 0
-    if args.checkpoint is not None:
+    if checkpoint_path is not None:
 
-        print("optimizer resume from checkpoint",args.checkpoint," Checkpoint path found.",flush=True)
+        print("optimizer resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
 
         #map_location = 'cuda:'+str(device)
         map_location = 'cpu'
 
-        checkpoint = torch.load(args.checkpoint,map_location=map_location)
+        checkpoint = torch.load(checkpoint_path,map_location=map_location)
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         epoch_start = checkpoint['epoch']+1
@@ -425,7 +433,7 @@ def main(device):
 
 
     #perform training
-    for epoch in range(epoch_start,args.max_epochs):
+    for epoch in range(epoch_start,max_epochs):
     
         #tell the model that we are in train mode. Matters because we have the dropout
         model.train()
