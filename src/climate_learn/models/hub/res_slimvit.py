@@ -85,9 +85,9 @@ class Res_Slim_ViT(nn.Module):
 
         self.head = nn.ModuleList()
         for _ in range(decoder_depth):
-            self.head.append(nn.Linear(self.img_size[1]*superres_factor, self.img_size[1]*superres_factor))
+            self.head.append(nn.Linear(self.img_size[1]//self.patch_size*self.patch_size*superres_factor, self.img_size[1]//self.patch_size*self.patch_size*superres_factor))
             self.head.append(nn.GELU())
-        self.head.append(nn.Linear(self.img_size[1]*superres_factor, self.img_size[1]*superres_factor))
+        self.head.append(nn.Linear(self.img_size[1]//self.patch_size*self.patch_size*superres_factor, self.img_size[1]//self.patch_size*self.patch_size*superres_factor))
         self.head = nn.Sequential(*self.head)
         self.initialize_weights()
 
@@ -160,8 +160,13 @@ class Res_Slim_ViT(nn.Module):
         # x.shape = [B,num_patches,out_channels*patch_size*patch_size]
         x = self.unpatchify(x)
         # x.shape = [B,num_patches,h*patch_size, w*patch_size]
-   
-        preds = self.path1(x) + path2_result
+ 
+        x = self.path1(x)
+
+        if path2_result.size(dim=2) !=x.size(dim=2) or path2_result.size(dim=3) !=x.size(dim=3):
+            preds = x + path2_result[:,:,0:x.size(dim=2),0:x.size(dim=3)]
+        else:
+            preds = x + path2_result
 
         #decoder
         preds = self.head(preds) 
