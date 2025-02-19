@@ -56,14 +56,11 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
 
     print("xx.shape",xx.shape,"in_channel",in_channel,flush=True)
 
-    if dm.task == "downscaling":
-        temp = xx[in_channel]
+    temp = xx[in_channel]
             
-        temp = temp.repeat(len(out_list),1,1)
+    temp = temp.repeat(len(out_list),1,1)
  
-        img = in_transform(temp)[0].detach().cpu().numpy()
-    else:
-        img = in_transform(xx[0])[in_channel].detach().cpu().numpy()
+    img = in_transform(temp)[out_channel].detach().cpu().numpy()
 
     if src == "era5":
         img = np.flip(img, 0)
