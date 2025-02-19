@@ -1,21 +1,12 @@
 #!/bin/bash
 #SBATCH -A lrn036
 #SBATCH -J flash
-#SBATCH --nodes=1
+#SBATCH --nodes=2
 #SBATCH --gres=gpu:8
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
-<<<<<<< HEAD
-<<<<<<< HEAD
-#SBATCH -t 00:30:00
-#SBATCH -p batch
-=======
 #SBATCH -t 01:00:00
-=======
-#SBATCH -t 00:20:00
->>>>>>> 7d3f6fd (change launch script)
 #SBATCH -q debug
->>>>>>> ac4fb25 (fix bug when image size does not divide patch size. Add training script for PRISM)
 #SBATCH -o flash-%j.out
 #SBATCH -e flash-%j.out
 
