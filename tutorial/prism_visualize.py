@@ -140,10 +140,6 @@ data_module = cl.data.IterDataModule(
 data_module.setup()
 
 
-temp = [out_var_dict[k] for k in out_variable]
-
-print("temp is ",temp,flush=True)
-
 
 # Set up deep learning model
 model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms = cl.load_downscaling_module(device,data_module=data_module, architecture=preset,model_kwargs=model_kwargs)
@@ -160,7 +156,7 @@ denorm = test_transforms[0]
 
 print("denorm is ",denorm,flush=True)
 
-checkpoint_file = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/PRISM_rank_0_epoch_68.ckpt"
+checkpoint_file = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/PRISM_rank_0_epoch_85.ckpt"
 
 if os.path.exists(checkpoint_file):
     print("resume from checkpoint was set to True. Checkpoint path found.",flush=True)
