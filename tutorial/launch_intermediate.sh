@@ -44,4 +44,7 @@ export OMP_NUM_THREADS=7
 export PYTHONPATH=$PWD:$PYTHONPATH
 
 time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-python ./prism_prism_downscaling.py ../configs/prism_prism.yaml
+python ./intermediate_downscaling.py ../configs/era5_era5.yaml
+#time srun -n $((SLURM_JOB_NUM_NODES*8)) \
+#python ./intermediate_downscaling.py ../configs/prism_prism.yaml
+
