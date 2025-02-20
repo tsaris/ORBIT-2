@@ -192,6 +192,7 @@ model.eval()
 cl.utils.visualize.visualize_at_index(
     model,
     data_module,
+    out_list=out_variable,
     in_transform=denorm,
     out_transform=denorm,
     variable="2m_temperature",
