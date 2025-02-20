@@ -38,11 +38,12 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     adj_index = None
     for batch in dm.test_dataloader():
         x, y = batch[:2]
+        in_variables = batch[2]
         batch_size = x.shape[0]
         if index in range(counter, counter + batch_size):
             adj_index = index - counter
             x = x.to(device)
-            pred = mm.forward(x)
+            pred = mm.forward(x,in_variables)
             break
         counter += batch_size
 

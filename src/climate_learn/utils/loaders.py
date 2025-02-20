@@ -259,7 +259,7 @@ load_downscaling_module = partial(
 )
 
 
-def load_architecture(task, data_module, architecture, superres_mag=4,cnn_ratio=4, patch_size=2,embed_dim=256,depth=6,decoder_depth=1,num_heads=4,mlp_ratio=4,drop_path=0.1,drop_rate=0.1):
+def load_architecture(task, data_module, architecture, default_vars, superres_mag=4,cnn_ratio=4, patch_size=2,embed_dim=256,depth=6,decoder_depth=1,num_heads=4,mlp_ratio=4,drop_path=0.1,drop_rate=0.1):
     in_vars, out_vars = get_data_variables(data_module)
     in_shape, out_shape = get_data_dims(data_module)
 
@@ -336,6 +336,7 @@ def load_architecture(task, data_module, architecture, superres_mag=4,cnn_ratio=
         else:
             if architecture == "vit":
                 backbone = VisionTransformer(
+                    default_vars,
                     (out_height, out_width),
                     in_channels,
                     out_channels,
@@ -353,6 +354,7 @@ def load_architecture(task, data_module, architecture, superres_mag=4,cnn_ratio=
 
             elif architecture == "res_slimvit":
                 backbone = Res_Slim_ViT(
+                    default_vars,
                     (in_height, in_width),
                     in_channels,
                     out_channels,

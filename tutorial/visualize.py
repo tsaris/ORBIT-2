@@ -73,6 +73,8 @@ preset = conf['model']['preset']
 out_variable = conf['data']['out_variable']
 dict_in_variables = conf['data']['dict_in_variables']
 out_var_dict = conf['data']['out_var_dict']
+default_vars =  conf['data']['default_vars']
+
 
 lr = float(conf['model']['lr'])
 beta_1 = float(conf['model']['beta_1'])
@@ -95,10 +97,10 @@ drop_rate = conf['model']['drop_rate']
 
 
 if world_rank==0:
-    print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir,"preset",preset," ",out_variable," ",out_var_dict,"lr",lr,"beta_1",beta_1,"beta_2",beta_2,"weight_decay",weight_decay,"warmup_epochs",warmup_epochs,"warmup_start_lr",warmup_start_lr,"eta_min",eta_min,"superres_mag",superres_mag,"cnn_ratio",cnn_ratio,"patch_size",patch_size,"embed_dim",embed_dim,"depth",depth,"decoder_depth",decoder_depth,"num_heads",num_heads,"mlp_ratio",mlp_ratio,"drop_path",drop_path,"drop_rate",drop_rate,"batch_size",batch_size,"num_workers",num_workers,"buffer_size",buffer_size,flush=True)
+    print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir,"preset",preset,"out_variable",out_variable,"out_var_dict",out_var_dict,"lr",lr,"beta_1",beta_1,"beta_2",beta_2,"weight_decay",weight_decay,"warmup_epochs",warmup_epochs,"warmup_start_lr",warmup_start_lr,"eta_min",eta_min,"superres_mag",superres_mag,"cnn_ratio",cnn_ratio,"patch_size",patch_size,"embed_dim",embed_dim,"depth",depth,"decoder_depth",decoder_depth,"num_heads",num_heads,"mlp_ratio",mlp_ratio,"drop_path",drop_path,"drop_rate",drop_rate,"batch_size",batch_size,"num_workers",num_workers,"buffer_size",buffer_size,flush=True)
 
 
-model_kwargs = {'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate}
+model_kwargs = {'default_vars':default_vars,'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate}
 
 
 if world_rank==0:
@@ -113,16 +115,20 @@ if preset!="vit" and preset!="res_slimvit":
 
 # Set up data
 
-variables = dict_in_variables["PRISM"]
+variables = dict_in_variables["ERA5"]
  
-
 in_vars = []
+
 for var in variables:
     if var in PRESSURE_LEVEL_VARS:
+        default_vars.remove(var)
         for level in DEFAULT_PRESSURE_LEVELS:
             in_vars.append(var + "_" + str(level))
+            default_vars.append(var + "_" + str(level))
     else:
         in_vars.append(var)
+
+
 
 #load data module
 data_module = cl.data.IterDataModule(
@@ -140,7 +146,6 @@ data_module = cl.data.IterDataModule(
 data_module.setup()
 
 
-
 # Set up deep learning model
 model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms = cl.load_downscaling_module(device,data_module=data_module, architecture=preset,model_kwargs=model_kwargs)
   
@@ -156,7 +161,7 @@ denorm = test_transforms[0]
 
 print("denorm is ",denorm,flush=True)
 
-checkpoint_file = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/PRISM_rank_0_epoch_85.ckpt"
+checkpoint_file = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_24.ckpt"
 
 if os.path.exists(checkpoint_file):
     print("resume from checkpoint was set to True. Checkpoint path found.",flush=True)
@@ -196,8 +201,8 @@ cl.utils.visualize.visualize_at_index(
     out_list=out_variable,
     in_transform=denorm,
     out_transform=denorm,
-    variable="tmin",
-    src="prism",
+    variable="2m_temperature",
+    src="era5",
     device = device,
     index=0  # visualize the first sample of the test set
 )
