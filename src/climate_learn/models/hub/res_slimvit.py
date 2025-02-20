@@ -8,11 +8,14 @@ import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Block, PatchEmbed, trunc_normal_
 from einops import rearrange
+from functools import lru_cache
+import numpy as np
 
 @register("res_slimvit")
 class Res_Slim_ViT(nn.Module):
     def __init__(
         self,
+        default_vars,  #list of default variables to be used for training
         img_size,
         in_channels,
         out_channels,
@@ -30,6 +33,9 @@ class Res_Slim_ViT(nn.Module):
         mlp_ratio=4.0,
     ):
         super().__init__()
+        self.default_vars = default_vars
+
+
         self.img_size = img_size
         self.cnn_ratio = cnn_ratio
         self.superres_mag = superres_mag
@@ -38,8 +44,20 @@ class Res_Slim_ViT(nn.Module):
         self.patch_size = patch_size
 
         self.history = history
-        self.patch_embed = PatchEmbed(img_size, patch_size, self.in_channels, embed_dim)
-        self.num_patches = self.patch_embed.num_patches
+
+        self.token_embeds = nn.ModuleList(
+            [PatchEmbed(img_size, patch_size, 1, embed_dim) for i in range(len(default_vars))]
+        )
+        self.num_patches = self.token_embeds[0].num_patches
+
+        # variable embedding to denote which variable each token belongs to
+        # helps in aggregating variables
+
+        self.var_embed, self.var_map = self.create_var_embedding(embed_dim)
+
+        # variable aggregation: a learnable query and a single-layer cross attention
+        self.var_query = nn.Parameter(torch.zeros(1, 1, embed_dim), requires_grad=True)
+        self.var_agg = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
 
         self.pos_embed = nn.Parameter(
             torch.zeros(1, self.num_patches, embed_dim), requires_grad=learn_pos_emb
@@ -125,9 +143,79 @@ class Res_Slim_ViT(nn.Module):
         imgs = x.reshape(shape=(x.shape[0], c, h * p, w * p))
         return imgs
 
-    def forward_encoder(self, x: torch.Tensor):
-        # x.shape = [B,C,H,W]
-        x = self.patch_embed(x)
+
+    @lru_cache(maxsize=None)
+    def get_var_ids(self, vars, device):
+        ids = np.array([self.var_map[var] for var in vars])
+        return torch.from_numpy(ids).to(device)
+
+
+    def get_var_emb(self, var_emb, vars):
+        ids = self.get_var_ids(vars, var_emb.device)
+        return var_emb[:, ids, :]
+
+
+    def create_var_embedding(self, dim):
+        var_embed = nn.Parameter(torch.zeros(1, len(self.default_vars), dim), requires_grad=True)
+        # TODO: create a mapping from var --> idx
+        var_map = {}
+        idx = 0
+        for var in self.default_vars:
+            var_map[var] = idx
+            idx += 1
+        return var_embed, var_map
+
+
+
+    def aggregate_variables(self, x: torch.Tensor):
+        """
+        x: B, V, L, D
+        """
+        b, _, l, _ = x.shape
+        x = torch.einsum("bvld->blvd", x)
+        x = x.flatten(0, 1)  # BxL, V, D
+
+        var_query = self.var_query.repeat_interleave(x.shape[0], dim=0)
+
+        #src_rank = dist.get_rank() - dist.get_rank(group=self.tensor_par_group)
+
+        x , _ = self.var_agg(var_query, x, x)
+        #x = self.var_agg(var_query, x)  # BxL, V~ , D, where V~ is the aggregated variables
+
+        x = x.squeeze()
+
+
+#        x= F_Identity_B_Broadcast(x, src_rank, group=self.tensor_par_group)  #must do the backward broadcast because of the randomneess of dropout
+
+        x = x.unflatten(dim=0, sizes=(b, l))  # B, L, V~, D
+
+
+        return x
+
+
+
+    def forward_encoder(self, x: torch.Tensor, variables):
+
+        if isinstance(variables, list):
+            variables = tuple(variables)
+
+        #tokenize each variable separately
+        embeds = []
+        var_ids = self.get_var_ids(variables, x.device)
+
+        for i in range(len(var_ids)):
+            id = var_ids[i]
+            embeds.append(self.token_embeds[id](x[:, i : i + 1]))
+        x = torch.stack(embeds, dim=1)  # B, V, L, D
+
+        # add variable embedding
+        var_embed = self.get_var_emb(self.var_embed, variables)
+
+        x = x + var_embed.unsqueeze(2)  # B, V, L, D
+
+        # variable aggregation
+        x = self.aggregate_variables(x)  # B, L, D, 
+
         # x.shape = [B,num_patches,embed_dim]
 
         #if torch.distributed.get_rank()==0:
@@ -142,19 +230,16 @@ class Res_Slim_ViT(nn.Module):
         x = self.norm(x)
         return x
 
-    def forward(self, x):
+    def forward(self, x, in_variables):
         if len(x.shape) == 5:  # x.shape = [B,T,in_channels,H,W]
             x = x.flatten(1, 2)
         # x.shape = [B,T*in_channels,H,W]
 
- 
         path2_result = self.path2(x)
         
-        x = self.forward_encoder(x)
+        x = self.forward_encoder(x, in_variables)
 
         # x.shape = [B,num_patches,embed_dim]
-        #x = self.head(x)
-
 
         x = self.to_img(x) 
         # x.shape = [B,num_patches,out_channels*patch_size*patch_size]
