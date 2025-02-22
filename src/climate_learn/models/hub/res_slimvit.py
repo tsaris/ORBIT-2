@@ -7,6 +7,7 @@ from .utils import register
 import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Block, PatchEmbed, trunc_normal_
+from .components.attention import VariableMapping_Attention
 from einops import rearrange
 from functools import lru_cache
 import numpy as np
@@ -57,8 +58,10 @@ class Res_Slim_ViT(nn.Module):
 
         # variable aggregation: a learnable query and a single-layer cross attention
         self.var_query = nn.Parameter(torch.zeros(1, 1, embed_dim), requires_grad=True)
-        self.var_agg = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
 
+        #self.var_agg = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
+        self.var_agg = VariableMapping_Attention(embed_dim, fused_attn=False, num_heads=num_heads, qkv_bias=False)
+        
         self.pos_embed = nn.Parameter(
             torch.zeros(1, self.num_patches, embed_dim), requires_grad=learn_pos_emb
         )
@@ -172,23 +175,24 @@ class Res_Slim_ViT(nn.Module):
         x: B, V, L, D
         """
         b, _, l, _ = x.shape
+
         x = torch.einsum("bvld->blvd", x)
         x = x.flatten(0, 1)  # BxL, V, D
 
-        var_query = self.var_query.repeat_interleave(x.shape[0], dim=0)
+        #var_query = self.var_query.repeat_interleave(x.shape[0], dim=0)
+
+        var_query = self.var_query.expand(x.shape[0], -1, -1).contiguous()
 
         #src_rank = dist.get_rank() - dist.get_rank(group=self.tensor_par_group)
 
-        x , _ = self.var_agg(var_query, x, x)
-        #x = self.var_agg(var_query, x)  # BxL, V~ , D, where V~ is the aggregated variables
+        #x , _ = self.var_agg(var_query, x, x)
+        x = self.var_agg(var_query, x)  # BxL, V~ , D, where V~ is the aggregated variables
 
         x = x.squeeze()
-
 
 #        x= F_Identity_B_Broadcast(x, src_rank, group=self.tensor_par_group)  #must do the backward broadcast because of the randomneess of dropout
 
         x = x.unflatten(dim=0, sizes=(b, l))  # B, L, V~, D
-
 
         return x
 
@@ -221,7 +225,6 @@ class Res_Slim_ViT(nn.Module):
         #if torch.distributed.get_rank()==0:
         #    print("after patch_embed x.shape",x.shape,flush=True)
 
-
         x = x + self.pos_embed
         x = self.pos_drop(x)
         for blk in self.blocks:
@@ -236,7 +239,7 @@ class Res_Slim_ViT(nn.Module):
         # x.shape = [B,T*in_channels,H,W]
 
         path2_result = self.path2(x)
-        
+
         x = self.forward_encoder(x, in_variables)
 
         # x.shape = [B,num_patches,embed_dim]
