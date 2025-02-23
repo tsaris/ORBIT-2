@@ -93,23 +93,13 @@ class Res_Slim_ViT(nn.Module):
         self.path2 = nn.Sequential(*self.path2)
 
 
-        #vit path
-        self.path1 = nn.ModuleList()
-        self.path1.append(nn.Conv2d(in_channels=out_channels, out_channels=cnn_ratio*superres_mag*superres_mag, kernel_size=(3, 3), stride=1, padding=1)) 
-        self.path1.append(nn.GELU())
-        self.path1.append(nn.PixelShuffle(superres_mag))
-        self.path1.append(nn.Conv2d(in_channels=cnn_ratio, out_channels=out_channels, kernel_size=(3, 3), stride=1, padding=1)) 
-        self.path1 = nn.Sequential(*self.path1)
-
-
-        self.to_img = nn.Linear(embed_dim, out_channels * patch_size**2)
-
         self.head = nn.ModuleList()
         for _ in range(decoder_depth):
-            self.head.append(nn.Linear(self.img_size[1]//self.patch_size*self.patch_size*superres_mag, self.img_size[1]//self.patch_size*self.patch_size*superres_mag))
+            self.head.append(nn.Linear(embed_dim, embed_dim))
             self.head.append(nn.GELU())
-        self.head.append(nn.Linear(self.img_size[1]//self.patch_size*self.patch_size*superres_mag, self.img_size[1]//self.patch_size*self.patch_size*superres_mag))
+        self.head.append(nn.Linear(embed_dim,out_channels * patch_size**2))
         self.head = nn.Sequential(*self.head)
+        
         self.initialize_weights()
 
     def initialize_weights(self):
@@ -140,7 +130,6 @@ class Res_Slim_ViT(nn.Module):
         c = self.out_channels
         h = self.img_size[0] * scaling // p
         w = self.img_size[1] *scaling // p
-        assert h * w == x.shape[1]
         x = x.reshape(shape=(x.shape[0], h, w, p, p, c))
         x = torch.einsum("nhwpqc->nchpwq", x)
         imgs = x.reshape(shape=(x.shape[0], c, h * p, w * p))
@@ -244,19 +233,16 @@ class Res_Slim_ViT(nn.Module):
 
         # x.shape = [B,num_patches,embed_dim]
 
-        x = self.to_img(x) 
+        #decoder
+        x = self.head(x) 
         # x.shape = [B,num_patches,out_channels*patch_size*patch_size]
         x = self.unpatchify(x)
-        # x.shape = [B,num_patches,h*patch_size, w*patch_size]
+        # x.shape = [B,out_channels,h*patch_size, w*patch_size]
  
-        x = self.path1(x)
-
+ 
         if path2_result.size(dim=2) !=x.size(dim=2) or path2_result.size(dim=3) !=x.size(dim=3):
             preds = x + path2_result[:,:,0:x.size(dim=2),0:x.size(dim=3)]
         else:
             preds = x + path2_result
 
-        #decoder
-        preds = self.head(preds) 
-        # preds.shape = [B,out_channels,H,W]
         return preds
