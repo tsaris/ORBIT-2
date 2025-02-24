@@ -2,7 +2,7 @@
 trainer:
   max_epochs: 100
   checkpoint: 
-  pretrain: "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_0.ckpt" 
+  pretrain: "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_31.ckpt" 
   batch_size: 32
   buffer_size: 400
   num_workers: 2
@@ -11,7 +11,7 @@ trainer:
 # ---------------------------- MODEL -------------------------------------------
 model:
   preset: res_slimvit
-  lr: 2e-3
+  lr: 2e-4
   weight_decay: 1e-5
   beta_1: 0.9
   beta_2: 0.99
@@ -105,13 +105,13 @@ data:
   dict_out_variables: {
     'ERA5_1':[
       "2m_temperature",
-      "10m_u_component_of_wind",
-      "10m_v_component_of_wind",
+#      "10m_u_component_of_wind",
+#      "10m_v_component_of_wind",
     ],
     'ERA5_2':[
       "2m_temperature",
-      "10m_u_component_of_wind",
-      "10m_v_component_of_wind",
+#      "10m_u_component_of_wind",
+#      "10m_v_component_of_wind",
     ],
     'PRISM': ["prcp","tmin"],
   }
