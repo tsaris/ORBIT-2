@@ -97,7 +97,7 @@ class Res_Slim_ViT(nn.Module):
         for _ in range(decoder_depth):
             self.head.append(nn.Linear(embed_dim, embed_dim))
             self.head.append(nn.GELU())
-        self.head.append(nn.Linear(embed_dim,out_channels * patch_size**2))
+        self.head.append(nn.Linear(embed_dim,out_channels * (superres_mag*patch_size)**2))
         self.head = nn.Sequential(*self.head)
         
         self.initialize_weights()
@@ -236,7 +236,7 @@ class Res_Slim_ViT(nn.Module):
         #decoder
         x = self.head(x) 
         # x.shape = [B,num_patches,out_channels*patch_size*patch_size]
-        x = self.unpatchify(x)
+        x = self.unpatchify(x,scaling=self.superres_mag)
         # x.shape = [B,out_channels,h*patch_size, w*patch_size]
  
  
