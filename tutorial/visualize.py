@@ -70,9 +70,8 @@ pretrain_path = conf['trainer']['pretrain']
 low_res_dir = conf['data']['low_res_dir']
 high_res_dir = conf['data']['high_res_dir']
 preset = conf['model']['preset']
-out_variable = conf['data']['out_variable']
+dict_out_variables = conf['data']['dict_out_variables']
 dict_in_variables = conf['data']['dict_in_variables']
-out_var_dict = conf['data']['out_var_dict']
 default_vars =  conf['data']['default_vars']
 
 
@@ -97,7 +96,7 @@ drop_rate = conf['model']['drop_rate']
 
 
 if world_rank==0:
-    print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir,"preset",preset,"out_variable",out_variable,"out_var_dict",out_var_dict,"lr",lr,"beta_1",beta_1,"beta_2",beta_2,"weight_decay",weight_decay,"warmup_epochs",warmup_epochs,"warmup_start_lr",warmup_start_lr,"eta_min",eta_min,"superres_mag",superres_mag,"cnn_ratio",cnn_ratio,"patch_size",patch_size,"embed_dim",embed_dim,"depth",depth,"decoder_depth",decoder_depth,"num_heads",num_heads,"mlp_ratio",mlp_ratio,"drop_path",drop_path,"drop_rate",drop_rate,"batch_size",batch_size,"num_workers",num_workers,"buffer_size",buffer_size,flush=True)
+    print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir,"preset",preset,"dict_out_variables",dict_out_variables,"lr",lr,"beta_1",beta_1,"beta_2",beta_2,"weight_decay",weight_decay,"warmup_epochs",warmup_epochs,"warmup_start_lr",warmup_start_lr,"eta_min",eta_min,"superres_mag",superres_mag,"cnn_ratio",cnn_ratio,"patch_size",patch_size,"embed_dim",embed_dim,"depth",depth,"decoder_depth",decoder_depth,"num_heads",num_heads,"mlp_ratio",mlp_ratio,"drop_path",drop_path,"drop_rate",drop_rate,"batch_size",batch_size,"num_workers",num_workers,"buffer_size",buffer_size,flush=True)
 
 
 model_kwargs = {'default_vars':default_vars,'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate}
@@ -114,12 +113,12 @@ if preset!="vit" and preset!="res_slimvit":
 
 
 # Set up data
+data_key = "ERA5_1"
 
-variables = dict_in_variables["ERA5"]
- 
+in_temp = dict_in_variables[data_key]
 in_vars = []
-
-for var in variables:
+    
+for var in in_temp:
     if var in PRESSURE_LEVEL_VARS:
         default_vars.remove(var)
         for level in DEFAULT_PRESSURE_LEVELS:
@@ -128,15 +127,32 @@ for var in variables:
     else:
         in_vars.append(var)
 
+out_temp = dict_out_variables[data_key]
+out_vars = []
+
+for var in out_temp:
+    if var in PRESSURE_LEVEL_VARS:
+        for level in DEFAULT_PRESSURE_LEVELS:
+            out_vars.append(var + "_" + str(level))
+    else:
+        out_vars.append(var)
+
+
+if world_rank==0:
+    print("in_vars",in_vars,flush=True)
+    print("out_vars",out_vars,flush=True)
+    print("updated default_vars",default_vars,flush=True)
+ 
+
 
 
 #load data module
 data_module = cl.data.IterDataModule(
     "downscaling",
-    low_res_dir, 
-    high_res_dir,
+    low_res_dir[data_key], 
+    high_res_dir[data_key],
     in_vars,
-    out_vars=[out_var_dict[k] for k in out_variable],
+    out_vars=out_vars,
     subsample=1,
     batch_size=batch_size,
     buffer_size=buffer_size,
@@ -161,7 +177,7 @@ denorm = test_transforms[0]
 
 print("denorm is ",denorm,flush=True)
 
-checkpoint_file = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_24.ckpt"
+checkpoint_file = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_23.ckpt"
 
 if os.path.exists(checkpoint_file):
     print("resume from checkpoint was set to True. Checkpoint path found.",flush=True)
@@ -198,7 +214,7 @@ model.eval()
 cl.utils.visualize.visualize_at_index(
     model,
     data_module,
-    out_list=out_variable,
+    out_list=out_vars,
     in_transform=denorm,
     out_transform=denorm,
     variable="2m_temperature",
