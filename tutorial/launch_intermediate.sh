@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -A lrn036
 #SBATCH -J flash
-#SBATCH --nodes=2
+#SBATCH --nodes=32
 #SBATCH --gres=gpu:8
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
@@ -44,7 +44,10 @@ export OMP_NUM_THREADS=7
 export PYTHONPATH=$PWD:$PYTHONPATH
 
 time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-python ./intermediate_downscaling.py ../configs/era5_era5.yaml
+python ./intermediate_downscaling.py ../configs/interm.yaml
+
+#time srun -n $((SLURM_JOB_NUM_NODES*8)) \
+#python ./intermediate_downscaling.py ../configs/era5_era5.yaml
 #time srun -n $((SLURM_JOB_NUM_NODES*8)) \
 #python ./intermediate_downscaling.py ../configs/prism_prism.yaml
 
