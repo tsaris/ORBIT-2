@@ -38,6 +38,7 @@ from climate_learn.models.hub.components.cnn_blocks import (
     ResidualBlock
 )
 
+from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed
 
 
 def load_pretrained_weights(model, pretrained_path, device):
@@ -63,8 +64,13 @@ def load_pretrained_weights(model, pretrained_path, device):
             print(f"Removing key {k} from pretrained checkpoint: no exist")
             del pretrain_model[k]
         elif pretrain_model[k].shape != state_dict[k].shape:  #if pre-train and fine-tune model weights dimension doesn't match
-            print(f"Removing key {k} from pretrained checkpoint: no matching shape", pretrain_model[k].shape, state_dict[k].shape)
-            del pretrain_model[k]
+            if k =="pos_embed":
+                print("interpolate positional embedding",flush=True)
+                interpolate_pos_embed(model, pretrain_model, new_size=model.img_size)
+
+            else:
+                print(f"Removing key {k} from pretrained checkpoint: no matching shape", pretrain_model[k].shape, state_dict[k].shape)
+                del pretrain_model[k]
 
 
   
