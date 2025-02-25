@@ -35,6 +35,50 @@ from climate_learn.models.hub.components.cnn_blocks import (
     ResidualBlock
 )
 
+from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed
+
+
+def load_pretrained_weights(model, pretrained_path, device):
+    # map_location = 'cuda:'+str(device)
+    map_location = 'cpu'
+    checkpoint = torch.load(pretrained_path, map_location=map_location)
+
+    print("Loading pre-trained checkpoint from: %s" % pretrained_path)
+    pretrain_model = checkpoint["model_state_dict"]
+
+    del checkpoint
+
+
+    state_dict = model.state_dict()
+   
+    for k in list(pretrain_model.keys()):
+        print("Pretrained model before deletion. Name ",k,flush=True)
+
+
+    # checkpoint_keys = list(pretrain_model.keys())
+    for k in list(pretrain_model.keys()):  #in pre-train model weights, but not fine-tuning model
+        if k not in state_dict.keys():
+            print(f"Removing key {k} from pretrained checkpoint: no exist")
+            del pretrain_model[k]
+        elif pretrain_model[k].shape != state_dict[k].shape:  #if pre-train and fine-tune model weights dimension doesn't match
+            if k =="pos_embed":
+                print("interpolate positional embedding",flush=True)
+                interpolate_pos_embed(model, pretrain_model, new_size=model.img_size)
+
+            else:
+                print(f"Removing key {k} from pretrained checkpoint: no matching shape", pretrain_model[k].shape, state_dict[k].shape)
+                del pretrain_model[k]
+  
+#    for k in list( checkpoint_model.keys()):
+#        print("after deletion. Name ",k,flush=True)
+
+    # load pre-trained model
+    msg = model.load_state_dict(pretrain_model, strict=False)
+    print(msg)
+    del pretrain_model
+
+
+
 
 os.environ['MASTER_ADDR'] = str(os.environ['HOSTNAME'])
 os.environ['MASTER_PORT'] = "29500"
@@ -113,7 +157,7 @@ if preset!="vit" and preset!="res_slimvit":
 
 
 # Set up data
-data_key = "ERA5_1"
+data_key = "INFER"
 
 in_temp = dict_in_variables[data_key]
 in_vars = []
@@ -154,7 +198,7 @@ data_module = cl.data.IterDataModule(
     in_vars,
     out_vars=out_vars,
     subsample=1,
-    batch_size=batch_size,
+    batch_size=1,
     buffer_size=buffer_size,
     num_workers=num_workers,
 ).to(device)
@@ -166,7 +210,7 @@ data_module.setup()
 model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms = cl.load_downscaling_module(device,data_module=data_module, architecture=preset,model_kwargs=model_kwargs)
   
 if dist.get_rank()==0:
-    print("train_loss",train_loss,"train_transform",train_transform,flush=True)
+    print("train_loss",train_loss,"train_transform",train_transform,"img_size",model.img_size,flush=True)
  
 
 #denorm = model.test_target_transforms[0]
@@ -177,24 +221,17 @@ denorm = test_transforms[0]
 
 print("denorm is ",denorm,flush=True)
 
-checkpoint_file = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_23.ckpt"
+checkpoint_file = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_4.ckpt"
 
+
+#load pretrained model
 if os.path.exists(checkpoint_file):
-    print("resume from checkpoint was set to True. Checkpoint path found.",flush=True)
-
-    print("rank",dist.get_rank(),"src_rank",world_rank,flush=True)
-
-    #map_location = 'cuda:'+str(device)
-    map_location = 'cpu'
-
-    checkpoint = torch.load(checkpoint_file,map_location=map_location)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    del checkpoint
-
+    print("load pretrained model",checkpoint_file," Pretrain path found.",flush=True)
+    load_pretrained_weights(model,checkpoint_file,device)  
 else:
-    print("the checkpoint path does not exist.",flush=True)
+    print("resume from pretrained model was set to True. But the pretrained model path does not exist.",flush=True)
+    sys.exit("pretrain path does not exist")
 
-    sys.exit("checkpoint path does not exist")
 
 
 
