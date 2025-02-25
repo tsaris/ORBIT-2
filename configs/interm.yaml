@@ -1,8 +1,8 @@
 #-----------   TRAINER -------------
 trainer:
   max_epochs: 100
-  checkpoint: 
-  pretrain: "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_31.ckpt" 
+  checkpoint: "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_4.ckpt" 
+  pretrain: 
   batch_size: 32
   buffer_size: 400
   num_workers: 2
@@ -56,6 +56,9 @@ data:
     "10m_v_component_of_wind",
     "geopotential",
     "temperature",
+    "specific_humidity",
+    "total_precipitation",
+
   ]
 
 
@@ -70,6 +73,8 @@ data:
       "10m_v_component_of_wind",
       "geopotential",
       "temperature",
+      "specific_humidity",
+      "total_precipitation",
     ],
     'ERA5_2': [
       "land_sea_mask",
@@ -80,6 +85,8 @@ data:
       "10m_v_component_of_wind",
       "geopotential",
       "temperature",
+      "specific_humidity",
+      "total_precipitation",
     ],
     'PRISM': [
       "land_sea_mask",
