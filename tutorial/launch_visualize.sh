@@ -6,7 +6,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=7
 #SBATCH -t 00:10:00
-#SBATCH -p batch
+#SBATCH -q debug
 #SBATCH -o flash-%j.out
 #SBATCH -e flash-%j.out
 
@@ -44,6 +44,10 @@ export OMP_NUM_THREADS=7
 export PYTHONPATH=$PWD:$PYTHONPATH
 
 
-time srun -n $((SLURM_JOB_NUM_NODES*1)) python ./visualize.py ../configs/era5_era5.yaml
+#time srun -n $((SLURM_JOB_NUM_NODES*1)) python ./visualize.py ../configs/era5_era5.yaml
+#time srun -n $((SLURM_JOB_NUM_NODES*1)) python ./visualize.py ../configs/interm.yaml
+time srun -n $((SLURM_JOB_NUM_NODES*1)) python ./visualize.py ../configs/inference.yaml
+
+
 
 
