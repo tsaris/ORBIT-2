@@ -37,7 +37,7 @@ from climate_learn.models.hub.components.cnn_blocks import (
     UpBlock,
     ResidualBlock
 )
-
+from climate_learn.dist.profile import *
 
 
 def load_pretrained_weights(model, pretrained_path, device):
@@ -436,24 +436,33 @@ def main(device):
     val_dataloader = data_module.val_dataloader()
 
 
+    ## GPTL Timer
+    dist.barrier()
+    timer = ProfileTimer()
 
     #perform training
     for epoch in range(epoch_start,max_epochs):
     
         #tell the model that we are in train mode. Matters because we have the dropout
         model.train()
+        timer.begin("epoch")
         loss = 0.0
         epoch_loss = torch.tensor(0.0 , dtype=torch.float32, device=device)
         if world_rank==0:
             print("epoch ",epoch,flush=True)
     
+        timer.begin("dataload")
         for batch_idx, batch in enumerate(train_dataloader):
+            timer.end("dataload")
 
             if world_rank==0:
                 torch.cuda.synchronize(device=device)
                 tic1 = time.perf_counter() 
 
+            timer.begin("training_step")
+            ## torch.Size([64, 20, 32, 64]), torch.Size([64, 1, 128, 256])
             loss = training_step(batch, batch_idx,model,device,train_loss)
+            timer.end("training_step")
 
             epoch_loss += loss.detach()
     
@@ -461,8 +470,12 @@ def main(device):
                 print("epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," loss ",loss,flush=True)
     
             optimizer.zero_grad()
+            timer.begin("backward")
             loss.backward()
+            timer.end("backward")
+            timer.begin("optimizer_step")
             optimizer.step()
+            timer.end("optimizer_step")
 
     
             if world_rank==0:
@@ -473,9 +486,14 @@ def main(device):
                 torch.cuda.synchronize(device=device)
                 tic4 = time.perf_counter() 
                 print(f"my rank {dist.get_rank()}. tic4-tic1 in {(tic4-tic1):0.4f} seconds\n",flush=True)
-    
+
+            timer.begin("dataload")
+
+        if timer.isactive("dataload"):
+            timer.end("dataload")
 
         scheduler.step()
+        timer.end("epoch")
     
         if world_rank==0:
             print("epoch: ",epoch," epoch_loss ",epoch_loss,flush=True)
@@ -483,7 +501,7 @@ def main(device):
 
 
         if world_rank ==0:    
-            checkpoint_path = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate" 
+            checkpoint_path = "checkpoints/climate" 
             # Check whether the specified checkpointing path exists or not
             isExist = os.path.exists(checkpoint_path)
             if not isExist:
@@ -561,7 +579,16 @@ if __name__ == "__main__":
 
 
     print("Using dist.init_process_group. world_size ",world_size,flush=True)
-    
+
+    ## GPTL timer init
+    gp.initialize()
+
     main(device)
+
+    ## GPTL timer output
+    output_dir = os.getenv("OUTPUT_DIR", "")
+    gp.pr_file(os.path.join(output_dir, f"gp_timing.p{world_rank}"))
+    gp.pr_summary_file(os.path.join(output_dir, "gp_timing.summary"))
+    gp.finalize()
 
     dist.destroy_process_group()
