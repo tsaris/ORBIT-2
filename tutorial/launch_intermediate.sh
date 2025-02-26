@@ -44,7 +44,7 @@ export PYTHONNOUSERSITE=1
 
 
 export OMP_NUM_THREADS=7
-export PYTHONPATH=/lustre/orion/world-shared/lrn036/jyc/frontier/super-res-torchlight/src:$PYTHONPATH
+export PYTHONPATH=$PWD/../src:$PYTHONPATH
 
 export ORBIT_USE_DDSTORE=1 ## 0 or 1 (disable)
 
