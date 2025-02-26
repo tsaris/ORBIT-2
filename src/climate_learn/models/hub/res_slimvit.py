@@ -46,6 +46,9 @@ class Res_Slim_ViT(nn.Module):
 
         self.history = history
 
+        self.spatial_resolution = 0
+        self.spatial_embed = nn.Linear(1, embed_dim)
+        
         self.token_embeds = nn.ModuleList(
             [PatchEmbed(img_size, patch_size, 1, embed_dim) for i in range(len(default_vars))]
         )
@@ -112,6 +115,9 @@ class Res_Slim_ViT(nn.Module):
         self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
         self.apply(self._init_weights)
 
+
+
+
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=0.02)
@@ -120,6 +126,14 @@ class Res_Slim_ViT(nn.Module):
         elif isinstance(m, nn.LayerNorm):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
+
+
+    def update_spatial_resolution(self, res):
+        if torch.distributed.get_rank()==0:
+            print("res is ",res,flush=True)
+
+        self.spatial_resolution = res
+
 
     def unpatchify(self, x: torch.Tensor, scaling =1):
         """
@@ -215,6 +229,15 @@ class Res_Slim_ViT(nn.Module):
         #    print("after patch_embed x.shape",x.shape,flush=True)
 
         x = x + self.pos_embed
+
+        # add spatial resolution embedding
+
+        spatial_emb = self.spatial_embed(torch.tensor(self.spatial_resolution,dtype=x.dtype,device=x.device).unsqueeze(-1))  # D
+
+        spatial_emb = spatial_emb.unsqueeze(0).unsqueeze(0)  #1, 1, D
+
+        x = x + spatial_emb  # B, V~ * L, D
+
         x = self.pos_drop(x)
         for blk in self.blocks:
             x = blk(x)
