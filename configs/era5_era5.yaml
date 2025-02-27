@@ -69,11 +69,16 @@ data:
   out_var_dict: {
       "t2m": "2m_temperature",
       "z500": "geopotential_500",
+      "t50": "temperature_50",
+      "t250": "temperature_250",
       "t850": "temperature_850",
       "u10": "10m_u_component_of_wind",
       "prcp": "prcp",
       "orography": "orography",
+      "temperature": "temperature",
+      "geopotential": "geopotential",
+      
   }
 
 
-  out_variable: ["t2m"]
+  out_variable: ["t2m","u10","z500"]
