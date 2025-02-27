@@ -28,23 +28,28 @@ eval "$(/lustre/orion/world-shared/stf218/atsaris/env_test_march/miniconda/bin/c
 
 conda activate /lustre/orion/nro108/world-shared/xf9/flash-attention-torch25
 
-export LD_LIBRARY_PATH=/lustre/orion/world-shared/stf218/junqi/climax/rccl-plugin-rocm6/lib/:/opt/rocm-6.2.0/lib:$LD_LIBRARY_PATH
+#export LD_LIBRARY_PATH=/lustre/orion/world-shared/stf218/junqi/climax/rccl-plugin-rocm6/lib/:/opt/rocm-6.2.0/lib:$LD_LIBRARY_PATH
 
-
-
+## DDStore and GPTL Timer
+module use -a /lustre/orion/world-shared/lrn036/jyc/frontier/sw/modulefiles
+module load SR_tools
 
 
 export MIOPEN_DISABLE_CACHE=1
 export NCCL_PROTO=Simple
 export MIOPEN_USER_DB_PATH=/tmp/$JOBID
 mkdir -p $MIOPEN_USER_DB_PATH
+export HOSTNAME=$(hostname)
+export PYTHONNOUSERSITE=1
 
 
 export OMP_NUM_THREADS=7
-export PYTHONPATH=$PWD:$PYTHONPATH
+export PYTHONPATH=$PWD/../src:$PYTHONPATH
 
-time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-python ./intermediate_downscaling.py ../configs/era5_era5.yaml
+export ORBIT_USE_DDSTORE=1 ## 0 or 1 (disable)
+
+time srun -n $((SLURM_JOB_NUM_NODES*8)) --ntasks-per-node=8 --cpus-per-task=7 --gres=gpu:8 -u \
+python -u ./intermediate_downscaling.py ../configs/era5_era5.yaml
 #time srun -n $((SLURM_JOB_NUM_NODES*8)) \
 #python ./intermediate_downscaling.py ../configs/prism_prism.yaml
 

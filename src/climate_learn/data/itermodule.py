@@ -7,6 +7,7 @@ from typing import Dict, Optional, OrderedDict
 # Third party
 import numpy as np
 import torch
+import torch.distributed as dist
 from torch.utils.data import DataLoader, IterableDataset
 from torchvision.transforms import transforms
 
@@ -21,6 +22,8 @@ from .iterdataset import (
 )
 from .processing.era5_constants import PRECIP_VARIABLES
 from .precipmodule import LogTransform
+
+from climate_learn.dist.distdataset import *
 
 
 class IterDataModule(torch.nn.Module):
@@ -58,6 +61,7 @@ class IterDataModule(torch.nn.Module):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.pin_memory = pin_memory
+        self.ddp_group = dist.distributed_c10d._get_default_group()
 
         if task in ("direct-forecasting", "iterative-forecasting"):
             self.dataset_caller = DirectForecast
@@ -189,6 +193,58 @@ class IterDataModule(torch.nn.Module):
 
     def setup(self, stage: Optional[str] = None):
         # load datasets only if they're not loaded already
+        use_ddstore = int(os.environ.get("ORBIT_USE_DDSTORE", 0))
+        print("use_ddstore is :", use_ddstore, flush=True)
+        if use_ddstore:
+            self.data_train = IndividualDataIter(
+                self.dataset_caller(
+                    NpyReader(
+                        inp_file_list=self.inp_lister_train,
+                        out_file_list=self.out_lister_train,
+                        variables=self.in_vars,
+                        out_variables=self.out_vars,
+                        shuffle=True,
+                    ),
+                    **self.dataset_arg,
+                ),
+                transforms=self.transforms,
+                output_transforms=self.output_transforms,
+                subsample=self.subsample,
+            )
+
+            self.data_val = IndividualDataIter(
+                self.dataset_caller(
+                    NpyReader(
+                        inp_file_list=self.inp_lister_val,
+                        out_file_list=self.out_lister_val,
+                        variables=self.in_vars,
+                        out_variables=self.out_vars,
+                        shuffle=False,
+                    ),
+                    **self.dataset_arg,
+                ),
+                transforms=self.transforms,
+                output_transforms=self.output_transforms,
+                subsample=self.subsample,
+            )
+
+            self.data_test = IndividualDataIter(
+                self.dataset_caller(
+                    NpyReader(
+                        inp_file_list=self.inp_lister_test,
+                        out_file_list=self.out_lister_test,
+                        variables=self.in_vars,
+                        out_variables=self.out_vars,
+                        shuffle=False,
+                    ),
+                    **self.dataset_arg,
+                ),
+                transforms=self.transforms,
+                output_transforms=self.output_transforms,
+                subsample=self.subsample,
+            )
+            return
+
         if stage != "test":
             if not self.data_train and not self.data_val and not self.data_test:
                 self.data_train = ShuffleIterableDataset(
@@ -259,6 +315,39 @@ class IterDataModule(torch.nn.Module):
             )
 
     def train_dataloader(self):
+        use_ddstore = int(os.environ.get("ORBIT_USE_DDSTORE", 0))
+        # print("use_ddstore is :", use_ddstore, flush=True)
+
+        if use_ddstore:
+            ## assume: a GPU is mapped by the local rank
+            gpu_id = int(os.getenv("SLURM_LOCALID", "0"))
+            os.environ["FABRIC_IFACE"] = f"hsn{gpu_id//2}"
+            print("FABRIC_IFACE:", os.environ["FABRIC_IFACE"])
+
+            ddp_group_size = dist.get_world_size(group=self.ddp_group)
+            ddp_group_rank = dist.get_rank(group=self.ddp_group)
+
+            trainset = DistDataset(
+                self.data_train,
+                "trainset",
+                ddp_group = self.ddp_group,
+                )
+
+            sampler = torch.utils.data.distributed.DistributedSampler(trainset, num_replicas=ddp_group_size, rank=ddp_group_rank, shuffle=True)
+
+            train_loader = DDStoreDataLoader(
+            # train_loader = torch.utils.data.DataLoader(
+                trainset.ddstore,
+                trainset,
+                batch_size=self.batch_size,
+                shuffle=False,
+                drop_last=True,
+                sampler=sampler,
+                collate_fn=collate_fn,
+            )
+
+            return train_loader
+
         return DataLoader(
             self.data_train,
             batch_size=self.batch_size,

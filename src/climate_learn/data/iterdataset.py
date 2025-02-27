@@ -45,8 +45,14 @@ class NpyReader(IterableDataset):
 
         worker_info = torch.utils.data.get_worker_info()
         if worker_info is None:
-            iter_start = 0
-            iter_end = n_files
+            rank = torch.distributed.get_rank()
+            world_size = torch.distributed.get_world_size()
+            num_workers_per_ddp = 1
+            num_shards = num_workers_per_ddp * world_size
+            per_worker = n_files // num_shards
+            worker_id = rank * num_workers_per_ddp
+            iter_start = worker_id * per_worker
+            iter_end = iter_start + per_worker
         else:
             if not torch.distributed.is_initialized():
                 rank = 0
@@ -64,6 +70,7 @@ class NpyReader(IterableDataset):
         for idx in range(iter_start, iter_end):
             path_inp = self.inp_file_list[idx]
             path_out = self.out_file_list[idx]
+            print(torch.distributed.get_rank(), "NpyReader:", path_inp)
             inp = np.load(path_inp)
             if path_out == path_inp:
                 out = inp
