@@ -26,7 +26,7 @@ module load rocm/6.2.0
 
 eval "$(/lustre/orion/world-shared/stf218/atsaris/env_test_march/miniconda/bin/conda shell.bash hook)"
 
-conda activate /lustre/orion/nro108/world-shared/xf9/flash-attention-torch25
+conda activate /lustre/orion/lrn036/world-shared/xf9/flash-attention-torch25
 
 export LD_LIBRARY_PATH=/lustre/orion/world-shared/stf218/junqi/climax/rccl-plugin-rocm6/lib/:/opt/rocm-6.2.0/lib:$LD_LIBRARY_PATH
 
