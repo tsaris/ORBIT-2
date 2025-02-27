@@ -2,8 +2,8 @@
 trainer:
   max_epochs: 100
   checkpoint: 
-  pretrain: "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_2.ckpt"
-  batch_size: 32
+  pretrain: "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_4.ckpt" 
+  batch_size: 1
   buffer_size: 400
   num_workers: 2
 
@@ -36,6 +36,14 @@ data:
   }
   high_res_dir: {
     'INFER': "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/0.25_deg/",
+  }
+
+  # input spatial resolution in km
+  spatial_resolution: {
+    'ERA5_1': 625,
+    'ERA5_2': 111,
+    'PRISM':  18,
+    'INFER': 28,
   }
 
 
