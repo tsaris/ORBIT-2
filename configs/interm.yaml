@@ -1,8 +1,8 @@
 #-----------   TRAINER -------------
 trainer:
   max_epochs: 100
-  checkpoint: "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_4.ckpt" 
-  pretrain: 
+  checkpoint: "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_1.ckpt" 
+  pretrain: "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_18.ckpt" 
   batch_size: 32
   buffer_size: 400
   num_workers: 2
@@ -40,6 +40,13 @@ data:
     'ERA5_1': "/lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg/",
     'ERA5_2': "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/0.25_deg/",
     'PRISM': "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/prism-superres/2.5_arcmin/",
+  }
+
+  # input spatial resolution in km
+  spatial_resolution: {
+    'ERA5_1': 625,
+    'ERA5_2': 111,
+    'PRISM':  18,
   }
 
 
@@ -122,3 +129,5 @@ data:
     ],
     'PRISM': ["prcp","tmin"],
   }
+
+
