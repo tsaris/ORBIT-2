@@ -11,7 +11,7 @@ trainer:
 # ---------------------------- MODEL -------------------------------------------
 model:
   preset: res_slimvit
-  lr: 2e-4
+  lr: 2e-3
   weight_decay: 1e-5
   beta_1: 0.9
   beta_2: 0.99
@@ -61,41 +61,67 @@ data:
     "tmin",
     "tmax",
     "2m_temperature",
+    "temperature_200",
+    "temperature_500",
+    "temperature_850",
     "10m_u_component_of_wind",
+    "u_component_of_wind_200",
+    "u_component_of_wind_500",
+    "u_component_of_wind_850",
     "10m_v_component_of_wind",
-    "geopotential",
-    "temperature",
-    "specific_humidity",
+    "v_component_of_wind_200",
+    "v_component_of_wind_500",
+    "v_component_of_wind_850",
+    "specific_humidity_200",
+    "specific_humidity_500",
+    "specific_humidity_850",
     "total_precipitation",
-
   ]
 
 
 
   dict_in_variables: {
     'ERA5_1': [
-      "land_sea_mask",
-      "orography",
-      "lattitude",
-      "2m_temperature",
-      "10m_u_component_of_wind",
-      "10m_v_component_of_wind",
-      "geopotential",
-      "temperature",
-      "specific_humidity",
-      "total_precipitation",
+    "land_sea_mask",
+    "orography",
+    "lattitude",
+    "2m_temperature",
+    "temperature_200",
+    "temperature_500",
+    "temperature_850",
+    "10m_u_component_of_wind",
+    "u_component_of_wind_200",
+    "u_component_of_wind_500",
+    "u_component_of_wind_850",
+    "10m_v_component_of_wind",
+    "v_component_of_wind_200",
+    "v_component_of_wind_500",
+    "v_component_of_wind_850",
+    "specific_humidity_200",
+    "specific_humidity_500",
+    "specific_humidity_850",
+    "total_precipitation",
     ],
     'ERA5_2': [
-      "land_sea_mask",
-      "orography",
-      "lattitude",
-      "2m_temperature",
-      "10m_u_component_of_wind",
-      "10m_v_component_of_wind",
-      "geopotential",
-      "temperature",
-      "specific_humidity",
-      "total_precipitation",
+    "land_sea_mask",
+    "orography",
+    "lattitude",
+    "2m_temperature",
+    "temperature_200",
+    "temperature_500",
+    "temperature_850",
+    "10m_u_component_of_wind",
+    "u_component_of_wind_200",
+    "u_component_of_wind_500",
+    "u_component_of_wind_850",
+    "10m_v_component_of_wind",
+    "v_component_of_wind_200",
+    "v_component_of_wind_500",
+    "v_component_of_wind_850",
+    "specific_humidity_200",
+    "specific_humidity_500",
+    "specific_humidity_850",
+    "total_precipitation",
     ],
     'PRISM': [
       "land_sea_mask",
@@ -120,14 +146,14 @@ data:
 
   dict_out_variables: {
     'ERA5_1':[
-#       "total_precipitation",
-      "2m_temperature",
+       "total_precipitation",
+#      "2m_temperature",
 #      "10m_u_component_of_wind",
 #      "10m_v_component_of_wind",
     ],
     'ERA5_2':[
-#       "total_precipitation",
-      "2m_temperature",
+       "total_precipitation",
+#      "2m_temperature",
 #      "10m_u_component_of_wind",
 #      "10m_v_component_of_wind",
     ],
