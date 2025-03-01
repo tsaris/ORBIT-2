@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -A nro108
+#SBATCH -A lrn036
 #SBATCH -J flash
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
@@ -26,7 +26,7 @@ module load rocm/6.2.0
 
 eval "$(/lustre/orion/world-shared/stf218/atsaris/env_test_march/miniconda/bin/conda shell.bash hook)"
 
-conda activate /lustre/orion/nro108/world-shared/xf9/flash-attention-torch25
+conda activate /lustre/orion/lrn036/world-shared/xf9/flash-attention-torch25
 
 export LD_LIBRARY_PATH=/lustre/orion/world-shared/stf218/junqi/climax/rccl-plugin-rocm6/lib/:/opt/rocm-6.2.0/lib:$LD_LIBRARY_PATH
 
@@ -44,6 +44,10 @@ export OMP_NUM_THREADS=7
 export PYTHONPATH=$PWD:$PYTHONPATH
 
 
-time srun -n $((SLURM_JOB_NUM_NODES*1)) python ./visualize.py ../configs/era5_era5.yaml
+#time srun -n $((SLURM_JOB_NUM_NODES*1)) python ./visualize.py ../configs/era5_era5.yaml
+time srun -n $((SLURM_JOB_NUM_NODES*1)) python ./visualize.py ../configs/interm.yaml
+#time srun -n $((SLURM_JOB_NUM_NODES*1)) python ./visualize.py ../configs/inference.yaml
+
+
 
 

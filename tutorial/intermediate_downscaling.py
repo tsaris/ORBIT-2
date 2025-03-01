@@ -37,6 +37,7 @@ from climate_learn.models.hub.components.cnn_blocks import (
     UpBlock,
     ResidualBlock
 )
+from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed
 from climate_learn.dist.profile import *
 
 
@@ -58,27 +59,18 @@ def load_pretrained_weights(model, pretrained_path, device):
 
 
     # checkpoint_keys = list(pretrain_model.keys())
-    for k in list(pretrain_model.keys()):
-        if "pos_embed" in k:
-            print(f"Removing pos_embed")
-            del pretrain_model[k]
-        if "var_" in k:
-            print(f"Removing var_embed, var_query and var_agg")
-            del pretrain_model[k]
-        if  "token_embeds" in k:
-            print(f"Removing token_embed")
-            del pretrain_model[k]
-        if "channel" in k:
-            print("k:", k)
-            pretrain_model[k.replace("channel", "var")] = pretrain_model[k]
-            del pretrain_model[k]
     for k in list(pretrain_model.keys()):  #in pre-train model weights, but not fine-tuning model
         if k not in state_dict.keys():
             print(f"Removing key {k} from pretrained checkpoint: no exist")
             del pretrain_model[k]
         elif pretrain_model[k].shape != state_dict[k].shape:  #if pre-train and fine-tune model weights dimension doesn't match
-            print(f"Removing key {k} from pretrained checkpoint: no matching shape", pretrain_model[k].shape, state_dict[k].shape)
-            del pretrain_model[k]
+            if k =="pos_embed":
+                print("interpolate positional embedding",flush=True)
+                interpolate_pos_embed(model, pretrain_model, new_size=model.img_size)
+
+            else:
+                print(f"Removing key {k} from pretrained checkpoint: no matching shape", pretrain_model[k].shape, state_dict[k].shape)
+                del pretrain_model[k]
 
 
   
@@ -223,10 +215,10 @@ def main(device):
     low_res_dir = conf['data']['low_res_dir']
     high_res_dir = conf['data']['high_res_dir']
     preset = conf['model']['preset']
-    out_variable = conf['data']['out_variable']
+    dict_out_variables = conf['data']['dict_out_variables']
     dict_in_variables = conf['data']['dict_in_variables']
-    out_var_dict = conf['data']['out_var_dict']
     default_vars =  conf['data']['default_vars']
+    spatial_resolution = conf['data']['spatial_resolution']
 
     lr = float(conf['model']['lr'])
     beta_1 = float(conf['model']['beta_1'])
@@ -248,7 +240,7 @@ def main(device):
     drop_rate = conf['model']['drop_rate']
 
     if world_rank==0:
-        print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir,"default_vars",default_vars,"preset",preset," ",out_variable," ",out_var_dict,"lr",lr,"beta_1",beta_1,"beta_2",beta_2,"weight_decay",weight_decay,"warmup_epochs",warmup_epochs,"warmup_start_lr",warmup_start_lr,"eta_min",eta_min,"superres_mag",superres_mag,"cnn_ratio",cnn_ratio,"patch_size",patch_size,"embed_dim",embed_dim,"depth",depth,"decoder_depth",decoder_depth,"num_heads",num_heads,"mlp_ratio",mlp_ratio,"drop_path",drop_path,"drop_rate",drop_rate,"batch_size",batch_size,"num_workers",num_workers,"buffer_size",buffer_size,flush=True)
+        print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir,"spatial_resolution",spatial_resolution,"default_vars",default_vars,"preset",preset,"lr",lr,"beta_1",beta_1,"beta_2",beta_2,"weight_decay",weight_decay,"warmup_epochs",warmup_epochs,"warmup_start_lr",warmup_start_lr,"eta_min",eta_min,"superres_mag",superres_mag,"cnn_ratio",cnn_ratio,"patch_size",patch_size,"embed_dim",embed_dim,"depth",depth,"decoder_depth",decoder_depth,"num_heads",num_heads,"mlp_ratio",mlp_ratio,"drop_path",drop_path,"drop_rate",drop_rate,"batch_size",batch_size,"num_workers",num_workers,"buffer_size",buffer_size,flush=True)
 
 
     model_kwargs = {'default_vars':default_vars,'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate}
@@ -269,33 +261,23 @@ def main(device):
 
     # Set up data
 
+    data_key = "ERA5_1"
+    in_vars = dict_in_variables[data_key]
+    out_vars = dict_out_variables[data_key]
 
-
-    variables = dict_in_variables["ERA5"]
     
-    in_vars = []
-    
-    for var in variables:
-        if var in PRESSURE_LEVEL_VARS:
-            default_vars.remove(var)
-            for level in DEFAULT_PRESSURE_LEVELS:
-                in_vars.append(var + "_" + str(level))
-                default_vars.append(var + "_" + str(level))
-        else:
-            in_vars.append(var)
-    
-
     if world_rank==0:
         print("in_vars",in_vars,flush=True)
-        print("updated default_vars",default_vars,flush=True)
+        print("out_vars",out_vars,flush=True)
+        print("default_vars",default_vars,flush=True)
 
     #load data module
     data_module = cl.data.IterDataModule(
         "downscaling",
-        low_res_dir,
-        high_res_dir,
+        low_res_dir[data_key],
+        high_res_dir[data_key],
         in_vars,
-        out_vars=[out_var_dict[k] for k in out_variable],
+        out_vars=out_vars,
         subsample=1,
         batch_size=batch_size,
         buffer_size=buffer_size,
@@ -308,8 +290,12 @@ def main(device):
   
     if dist.get_rank()==0:
         print("train_loss",train_loss,"train_transform",train_transform,"val_losses",val_losses,"val_transforms",val_transforms,flush=True)
- 
+
     model = model.to(device)
+
+
+    model.update_spatial_resolution(spatial_resolution[data_key]) 
+
 
 
     #load model checkpoint
@@ -342,8 +328,6 @@ def main(device):
 
 
     seed_everything(0)
-    default_root_dir = f"{preset}_downscaling_{out_variable}"
-
 
     #set up layer wrapping
     if preset =="vit" or preset=="res_slimvit":

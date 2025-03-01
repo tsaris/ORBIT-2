@@ -44,6 +44,9 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
             adj_index = index - counter
             x = x.to(device)
             pred = mm.forward(x,in_variables)
+
+            print("x.shape",x.shape,"y.shape",y.shape,"pred.shape",pred.shape,flush=True)
+
             break
         counter += batch_size
 
@@ -73,15 +76,17 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     img_max = np.max(img)
 
 
-    visualize_sample(img, extent, f"Input: {variable_with_units}",vmin=img_min,vmax=img_max)
+    plt.figure(figsize=(img.shape[1]/100,img.shape[0]/100))
+    plt.imshow(img,cmap='viridis')
     anim = None
     plt.show()
     plt.savefig('input.png')
-    print("input shape",img.shape,flush=True)
 
     # Plot the prediction
     ppred = out_transform(pred[adj_index])
 
+    print("ppred.shape",ppred.shape,flush=True)
+  
     ppred = ppred[out_channel].detach().cpu().numpy()
     if src == "era5":
         ppred = np.flip(ppred, 0)
@@ -92,12 +97,12 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     ppred_max = np.max(ppred)
 
 
-
-    visualize_sample(ppred, extent, f"Prediction: {variable_with_units}",vmin=img_min,vmax=img_max)
+    plt.figure(figsize=(ppred.shape[1]/100,ppred.shape[0]/100))
+    plt.imshow(ppred,cmap='viridis')
     plt.show()
     plt.savefig('prediction.png')
 
-    print("prediction ppred.shape",ppred.shape,"extent",flush=True)
+    print("prediction ppred.shape",ppred.shape,"extent",extent,flush=True)
 
 
 
@@ -117,20 +122,15 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     if yy.shape[0]!=ppred.shape[0] or yy.shape[1]!=ppred.shape[1]:
         yy= yy[0:ppred.shape[0],0:ppred.shape[1]]
 
-
-    visualize_sample(yy, extent, f"Ground truth: {variable_with_units}",vmin=img_min,vmax=img_max)
+    plt.figure(figsize=(yy.shape[1]/100,yy.shape[0]/100))
+    plt.imshow(yy,cmap='viridis')
     plt.show()
     plt.savefig('groundtruth.png')
 
 
-
-    # Plot the bias
-    bias = ppred - yy
-    visualize_sample(bias, extent, f"Bias: {variable_with_units}")
-    plt.show()
-
     # None, if no history
     return anim
+
 
 
 def visualize_sample(img, extent, title,vmin=-1,vmax=-1):

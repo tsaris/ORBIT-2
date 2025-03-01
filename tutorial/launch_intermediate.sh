@@ -49,7 +49,10 @@ export PYTHONPATH=$PWD/../src:$PYTHONPATH
 export ORBIT_USE_DDSTORE=0 ## 1 (enabled) or 0 (disable)
 
 time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-python ./intermediate_downscaling.py ../configs/era5_era5.yaml
+python ./intermediate_downscaling.py ../configs/interm.yaml
+
+#time srun -n $((SLURM_JOB_NUM_NODES*8)) \
+#python ./intermediate_downscaling.py ../configs/era5_era5.yaml
 #time srun -n $((SLURM_JOB_NUM_NODES*8)) \
 #python ./intermediate_downscaling.py ../configs/prism_prism.yaml
 
