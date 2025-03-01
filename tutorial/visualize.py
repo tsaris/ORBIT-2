@@ -157,7 +157,7 @@ if preset!="vit" and preset!="res_slimvit":
 
 
 # Set up data
-data_key = "INFER"
+data_key = "ERA5_2"
 
 in_temp = dict_in_variables[data_key]
 in_vars = []
@@ -221,7 +221,7 @@ denorm = test_transforms[0]
 
 print("denorm is ",denorm,flush=True)
 
-checkpoint_file = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_4.ckpt"
+checkpoint_file = "/lustre/orion/nro108/scratch/xf9/checkpoints/climate/interm_rank_0_epoch_9.ckpt"
 
 
 #load pretrained model
@@ -254,7 +254,7 @@ cl.utils.visualize.visualize_at_index(
     out_list=out_vars,
     in_transform=denorm,
     out_transform=denorm,
-    variable="2m_temperature",
+    variable="total_precipitation",
     src="era5",
     device = device,
     index=0  # visualize the first sample of the test set
