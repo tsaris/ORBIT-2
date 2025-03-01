@@ -261,38 +261,15 @@ def main(device):
 
     # Set up data
 
-    data_key = "ERA5_2"
-
-
-    in_temp = dict_in_variables[data_key]
-    in_vars = []
-    
-    for var in in_temp:
-        if var in PRESSURE_LEVEL_VARS:
-            default_vars.remove(var)
-            for level in DEFAULT_PRESSURE_LEVELS:
-                in_vars.append(var + "_" + str(level))
-                default_vars.append(var + "_" + str(level))
-        else:
-            in_vars.append(var)
-
-    out_temp = dict_out_variables[data_key]
-    out_vars = []
-
-    for var in out_temp:
-        if var in PRESSURE_LEVEL_VARS:
-            for level in DEFAULT_PRESSURE_LEVELS:
-                out_vars.append(var + "_" + str(level))
-        else:
-            out_vars.append(var)
+    data_key = "ERA5_1"
+    in_vars = dict_in_variables[data_key]
+    out_vars = dict_out_variables[data_key]
 
     
-    
-
     if world_rank==0:
         print("in_vars",in_vars,flush=True)
         print("out_vars",out_vars,flush=True)
-        print("updated default_vars",default_vars,flush=True)
+        print("default_vars",default_vars,flush=True)
 
     #load data module
     data_module = cl.data.IterDataModule(
