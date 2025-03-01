@@ -29,7 +29,7 @@ You can also request multiple nodes by changing `#SBATCH --nodes=1`  and set --n
 (6) Available training losses include MSE, MAE, latitude weighted MSE, Pearson Score, Anomaly Coefficient. Most recently, hybrid perceptual loss is implemented.  Training loss can be changed in ./src/climate-learn/util/loader.py
 
 
-**Available Training Data**
+**Available Training Data**  
 ERA5 5.6 degree "/lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg/"   
 ERA5 1.4 degree "/lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg/"  
 ERA5 1.0 degree "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/1.0_deg/"  
