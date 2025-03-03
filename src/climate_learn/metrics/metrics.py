@@ -1,5 +1,5 @@
 # Standard Library
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, Union, List, Dict
 
 # Local application
 from .utils import MetricsMetaInfo, register
