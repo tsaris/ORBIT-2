@@ -1,5 +1,5 @@
 # Standard library
-from typing import Optional, Union
+from typing import Optional, Union, List, Dict
 
 from sympy import true
 
