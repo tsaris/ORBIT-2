@@ -41,7 +41,7 @@ from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed
 from climate_learn.dist.profile import *
 
 
-def load_pretrained_weights(model, pretrained_path, device):
+def load_pretrained_weights(model, pretrained_path, device,data_key):
     # map_location = 'cuda:'+str(device)
     map_location = 'cpu'
     checkpoint = torch.load(pretrained_path, map_location=map_location)
@@ -55,7 +55,7 @@ def load_pretrained_weights(model, pretrained_path, device):
     state_dict = model.state_dict()
    
     for k in list(pretrain_model.keys()):
-        print("Pretrained model before deletion. Name ",k,flush=True)
+        print("Pretrained model before deletion. Name ",k,"shape",pretrain_model[k].shape,flush=True)
 
 
     # checkpoint_keys = list(pretrain_model.keys())
@@ -67,11 +67,43 @@ def load_pretrained_weights(model, pretrained_path, device):
             if k =="pos_embed":
                 print("interpolate positional embedding",flush=True)
                 interpolate_pos_embed(model, pretrain_model, new_size=model.img_size)
-
             else:
                 print(f"Removing key {k} from pretrained checkpoint: no matching shape", pretrain_model[k].shape, state_dict[k].shape)
                 del pretrain_model[k]
 
+
+        if data_key=="PRISM":
+            tmin_index = model.default_vars.index("tmin")
+            tmax_index = model.default_vars.index("tmax")
+            prcp_index = model.default_vars.index("prcp")
+            total_precipitation_index = model.default_vars.index("total_precipitation")
+            mean_temp_index = model.default_vars.index("2m_temperature")
+
+            print("tmin_index",tmin_index,"tmax_index",tmax_index,"prcp_index",prcp_index,"total_precipitation_index",total_precipitation_index,"mean_temp_index",mean_temp_index,flush=True)
+
+            if k==("token_embeds."+str(tmin_index)+".proj.weight"):
+                print("here in tmin proj clone ",flush=True)
+                pretrain_model[k] = pretrain_model["token_embeds."+str(mean_temp_index)+".proj.weight"].clone().detach()
+
+            elif k==("token_embeds."+str(tmin_index)+".proj.bias"):
+                print("here in tmin bias clone ",flush=True)
+                pretrain_model[k] = pretrain_model["token_embeds."+str(mean_temp_index)+".proj.bias"].clone().detach()
+
+            elif k==("token_embeds."+str(tmax_index)+".proj.weight"):
+                print("here in tmax proj clone ",flush=True)
+                pretrain_model[k] = pretrain_model["token_embeds."+str(mean_temp_index)+".proj.weight"].clone().detach()
+
+            elif k==("token_embeds."+str(tmax_index)+".proj.bias"):
+                print("here in tmax bias clone ",flush=True)
+                pretrain_model[k] = pretrain_model["token_embeds."+str(mean_temp_index)+".proj.bias"].clone().detach()
+
+            elif k==("token_embeds."+str(prcp_index)+".proj.weight"):
+                print("here in prcp proj clone ",flush=True)
+                pretrain_model[k] = pretrain_model["token_embeds."+str(total_precipitation_index)+".proj.weight"].clone().detach()
+
+            elif k==("token_embeds."+str(prcp_index)+".proj.bias"):
+                print("here in prcp bias clone ",flush=True)
+                pretrain_model[k] = pretrain_model["token_embeds."+str(total_precipitation_index)+".proj.bias"].clone().detach()
 
   
 #    for k in list( checkpoint_model.keys()):
@@ -261,7 +293,7 @@ def main(device):
 
     # Set up data
 
-    data_key = "ERA5_1"
+    data_key = "PRISM"
     in_vars = dict_in_variables[data_key]
     out_vars = dict_out_variables[data_key]
 
@@ -319,7 +351,7 @@ def main(device):
     if pretrain_path is not None:
         if os.path.exists(pretrain_path):
             print("load pretrained model",pretrain_path," Pretrain path found.",flush=True)
-            load_pretrained_weights(model,pretrain_path,device)  
+            load_pretrained_weights(model,pretrain_path,device,data_key)  
         else:
             print("resume from pretrained model was set to True. But the pretrained model path does not exist.",flush=True)
 
