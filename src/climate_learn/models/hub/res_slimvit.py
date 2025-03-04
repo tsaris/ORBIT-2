@@ -88,8 +88,9 @@ class Res_Slim_ViT(nn.Module):
         self.norm = nn.LayerNorm(embed_dim)
 
         #skip connection path
+        self.skip_to_img = nn.Linear(embed_dim,patch_size**2)
         self.path2 = nn.ModuleList()
-        self.path2.append(nn.Conv2d(in_channels=in_channels, out_channels=cnn_ratio*superres_mag*superres_mag, kernel_size=(3, 3), stride=1, padding=1)) 
+        self.path2.append(nn.Conv2d(in_channels=1, out_channels=cnn_ratio*superres_mag*superres_mag, kernel_size=(3, 3), stride=1, padding=1)) 
         self.path2.append(nn.GELU())
         self.path2.append(nn.PixelShuffle(superres_mag))
         self.path2.append(nn.Conv2d(in_channels=cnn_ratio, out_channels=out_channels, kernel_size=(3, 3), stride=1, padding=1)) 
@@ -135,13 +136,13 @@ class Res_Slim_ViT(nn.Module):
         self.spatial_resolution = res
 
 
-    def unpatchify(self, x: torch.Tensor, scaling =1):
+    def unpatchify(self, x: torch.Tensor, scaling =1, out_channels=1):
         """
         x: (B, L, V * patch_size**2)
         return imgs: (B, V, H, W)
         """
         p = self.patch_size
-        c = self.out_channels
+        c = out_channels
         h = self.img_size[0] * scaling // p
         w = self.img_size[1] *scaling // p
         x = x.reshape(shape=(x.shape[0], h, w, p, p, c))
@@ -200,6 +201,18 @@ class Res_Slim_ViT(nn.Module):
         return x
 
 
+    def residual_connection(self,x:torch.Tensor):
+        """
+         x: B, L, D
+        """
+        x = self.skip_to_img(x)
+        #x: B, L, patch_size* patch_size
+        x = self.unpatchify(x,scaling=1, out_channels=1)
+        #x: B,1, H, W
+        path2_result = self.path2(x)
+        #x: B, output channels, H, W
+        return path2_result
+
 
     def forward_encoder(self, x: torch.Tensor, variables):
 
@@ -228,6 +241,8 @@ class Res_Slim_ViT(nn.Module):
         #if torch.distributed.get_rank()==0:
         #    print("after patch_embed x.shape",x.shape,flush=True)
 
+        path2_result = self.residual_connection(x)     
+
         x = x + self.pos_embed
 
         # add spatial resolution embedding
@@ -236,30 +251,30 @@ class Res_Slim_ViT(nn.Module):
 
         spatial_emb = spatial_emb.unsqueeze(0).unsqueeze(0)  #1, 1, D
 
-        x = x + spatial_emb  # B, V~ * L, D
+        x = x + spatial_emb  # B, L, D
 
         x = self.pos_drop(x)
         for blk in self.blocks:
             x = blk(x)
         # x.shape = [B,num_patches,embed_dim]
         x = self.norm(x)
-        return x
+        return x, path2_result
+
 
     def forward(self, x, in_variables):
         if len(x.shape) == 5:  # x.shape = [B,T,in_channels,H,W]
             x = x.flatten(1, 2)
         # x.shape = [B,T*in_channels,H,W]
 
-        path2_result = self.path2(x)
 
-        x = self.forward_encoder(x, in_variables)
+        x, path2_result = self.forward_encoder(x, in_variables)
 
         # x.shape = [B,num_patches,embed_dim]
 
         #decoder
         x = self.head(x) 
         # x.shape = [B,num_patches,out_channels*patch_size*patch_size]
-        x = self.unpatchify(x,scaling=self.superres_mag)
+        x = self.unpatchify(x,scaling=self.superres_mag, out_channels=self.out_channels)
         # x.shape = [B,out_channels,h*patch_size, w*patch_size]
  
  
