@@ -146,24 +146,28 @@ data:
 
   dict_out_variables: {
     'ERA5_1':[
-       "total_precipitation",
-#      "2m_temperature",
-#      "10m_u_component_of_wind",
-#      "10m_v_component_of_wind",
+        "total_precipitation",
+        "2m_temperature",
+        "10m_u_component_of_wind",
+        "10m_v_component_of_wind",
     ],
     'ERA5_2':[
-       "total_precipitation",
-#      "2m_temperature",
-#      "10m_u_component_of_wind",
-#      "10m_v_component_of_wind",
+      "total_precipitation",
+      "2m_temperature",
+      "10m_u_component_of_wind",
+      "10m_v_component_of_wind",
     ],
-    'PRISM': ["prcp","tmin"],
+    'PRISM': ["prcp","tmax","tmin"],
   }
 
   # out_variable: ["t2m","u10","v10"]
 
   var_weights: {
-    "2m_temperatur": 1,
+    "2m_temperature": 1,
     "10m_u_component_of_wind": 0.1,
     "10m_v_component_of_wind": 0.1,
+    "total_precipitation": 0.1,
+    "prcp": 0.1,
+    "tmin": 1,
+    "tmax": 1
     }
