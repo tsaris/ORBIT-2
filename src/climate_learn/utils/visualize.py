@@ -23,13 +23,13 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
 
     history = mm.history
 
-    print("out_channel",out_channel,"in_channel",in_channel,"history",history,flush=True)
+    print("out_channel",out_channel,"in_channel",in_channel,"history",history,"src",src,"index",index,flush=True)
 
-    if src == "era5":
+    if "ERA5" in src:
         variable_with_units = f"{variable} ({ERA5_VAR_TO_UNIT[variable]})"
-    elif src == "cmip6":
+    elif src == "CMIP6":
         variable_with_units = f"{variable} ({CMIP6_VAR_TO_UNIT[variable]})"
-    elif src == "prism":
+    elif src == "PRISM":
         variable_with_units = f"{variable}"
     else:
         raise NotImplementedError(f"{src} is not a supported source")
@@ -66,9 +66,9 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
  
     img = in_transform(temp)[out_channel].detach().cpu().numpy()
 
-    if src == "era5":
+    if "ERA5" in src:
         img = np.flip(img, 0)
-    elif src == "prism":
+    elif src == "PRISM":
         img = np.flip(img, 0)
 
 
@@ -88,9 +88,9 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     print("ppred.shape",ppred.shape,flush=True)
   
     ppred = ppred[out_channel].detach().cpu().numpy()
-    if src == "era5":
+    if "ERA5" in src:
         ppred = np.flip(ppred, 0)
-    elif src == "prism":
+    elif src == "PRISM":
         ppred = np.flip(ppred, 0)
 
     ppred_min = np.min(ppred)
@@ -109,9 +109,9 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     # Plot the ground truth
     yy = out_transform(y[adj_index])
     yy = yy[out_channel].detach().cpu().numpy()
-    if src == "era5":
+    if "ERA5" in src:
         yy = np.flip(yy, 0)
-    elif src == "prism":
+    elif src == "PRISM":
         yy = np.flip(yy, 0)
 
 
