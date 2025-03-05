@@ -160,8 +160,6 @@ data:
     'PRISM': ["prcp","tmax","tmin"],
   }
 
-  # out_variable: ["t2m","u10","v10"]
-
   var_weights: {
     "2m_temperature": 1,
     "10m_u_component_of_wind": 0.1,
