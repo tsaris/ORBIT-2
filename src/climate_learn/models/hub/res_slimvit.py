@@ -11,6 +11,7 @@ from .components.attention import VariableMapping_Attention
 from einops import rearrange
 from functools import lru_cache
 import numpy as np
+from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed_2
 
 @register("res_slimvit")
 class Res_Slim_ViT(nn.Module):
@@ -45,7 +46,7 @@ class Res_Slim_ViT(nn.Module):
         self.patch_size = patch_size
 
         self.history = history
-
+        self.embed_dim = embed_dim
         self.spatial_resolution = 0
         self.spatial_embed = nn.Linear(1, embed_dim)
         
@@ -129,11 +130,26 @@ class Res_Slim_ViT(nn.Module):
             nn.init.constant_(m.weight, 1.0)
 
 
-    def update_spatial_resolution(self, res):
-        if torch.distributed.get_rank()==0:
-            print("res is ",res,flush=True)
+    def data_config(self, res, img_size, in_channels, out_channels):
+
+        orig_size = self.img_size
 
         self.spatial_resolution = res
+        self.img_size = img_size
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.num_patches = img_size[0] * img_size[1]// (self.patch_size **2)
+       
+        with torch.no_grad():
+            interpolate_pos_embed_2(self, orig_size=orig_size, new_size=img_size)
+
+ 
+        if torch.distributed.get_rank()==0:
+            print("updated res is ",res,"img_size",img_size,"in_channels",in_channels,"out_channels",out_channels,"num_patches",self.num_patches,flush=True)
+
+
+        if torch.distributed.get_rank()==0:
+            print("after update model.pos_embed.shape",self.pos_embed.shape,flush=True)
 
 
     def unpatchify(self, x: torch.Tensor, scaling =1, out_channels=1):
