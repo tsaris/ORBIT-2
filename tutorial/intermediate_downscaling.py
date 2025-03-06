@@ -292,6 +292,8 @@ def main(device):
 
     first_time_bool = True
 
+    interval_epochs = 5
+
     for data_key in low_res_dir.keys():
         # Set up data
 
@@ -442,12 +444,6 @@ def main(device):
                 epoch_start = checkpoint['epoch']+1
                 del checkpoint
 
-
-
-
-
-
-
         #get latitude and longitude
         lat, lon = data_module.get_lat_lon()
 
@@ -457,6 +453,32 @@ def main(device):
         # get validation data loader
         val_dataloader = data_module.val_dataloader()
 
+
+
+
+        ## GPTL Timer
+        #dist.barrier()
+        #timer = ProfileTimer()
+
+        #perform training
+
+        epoch_end = epoch_start+interval_epochs
+        epoch_end = epoch_end if epoch_end<max_epochs else max_epochs      
+
+        for epoch in range(epoch_start,epoch_end):
+    
+            #tell the model that we are in train mode. Matters because we have the dropout
+            model.train()
+            #timer.begin("epoch")
+            loss = 0.0
+            epoch_loss = torch.tensor(0.0 , dtype=torch.float32, device=device)
+            if world_rank==0:
+                print("epoch ",epoch,flush=True)
+ 
+
+
+
+        epoch_start = epoch_end
 
         if first_time_bool:
             first_time_bool = False
