@@ -292,7 +292,7 @@ def main(device):
 
     first_time_bool = True
 
-    interval_epochs = 5
+    interval_epochs = 1
 
     for data_key in low_res_dir.keys():
         # Set up data
@@ -308,6 +308,9 @@ def main(device):
             print("out_vars",out_vars,flush=True)
             print("default_vars",default_vars,flush=True)
             print("before data_module torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
+
+ 
+
 
 
          #load data module
@@ -474,7 +477,49 @@ def main(device):
             epoch_loss = torch.tensor(0.0 , dtype=torch.float32, device=device)
             if world_rank==0:
                 print("epoch ",epoch,flush=True)
- 
+
+            #timer.begin("dataload")
+            for batch_idx, batch in enumerate(train_dataloader):
+            #timer.end("dataload")
+
+                if world_rank==0:
+                    torch.cuda.synchronize(device=device)
+                    tic1 = time.perf_counter() 
+
+                #timer.begin("training_step")
+                ## torch.Size([64, 20, 32, 64]), torch.Size([64, 1, 128, 256])
+                loss = training_step(batch, batch_idx,model,device,train_loss)
+                #timer.end("training_step")
+
+                epoch_loss += loss.detach()
+    
+                if world_rank==0:
+                    print("epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," loss ",loss,flush=True)
+    
+                optimizer.zero_grad()
+                #timer.begin("backward")
+                loss.backward()
+                #timer.end("backward")
+                #timer.begin("optimizer_step")
+                optimizer.step()
+                #timer.end("optimizer_step")
+
+    
+                if world_rank==0:
+                    print("rank",world_rank,"batch_idx",batch_idx,"get_lr ",scheduler.get_lr(),"after optimizer step torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
+
+
+                if world_rank==0:
+                    torch.cuda.synchronize(device=device)
+                    tic4 = time.perf_counter() 
+                    print(f"my rank {dist.get_rank()}. tic4-tic1 in {(tic4-tic1):0.4f} seconds\n",flush=True)
+
+
+            scheduler.step()
+            #timer.end("epoch")
+    
+            if world_rank==0:
+                print("epoch: ",epoch," epoch_loss ",epoch_loss,flush=True)
 
 
 
