@@ -47,66 +47,61 @@ def load_model_module(
     # Temporary fix, per this discussion:
     # https://github.com/aditya-grover/climate-learn/pull/100#discussion_r1192812343
     lat, lon = data_module.get_lat_lon()
-    if lat is None and lon is None:
-        raise RuntimeError("Data module has not been set up yet.")
-    # Load the model
-    if architecture is None and model is None:
-        raise RuntimeError("Please specify 'architecture' or 'model'")
-    elif architecture:
-        print(f"Loading architecture: {architecture}")
-        model  = load_architecture(
-            task, data_module, architecture, **model_kwargs
-        )
-
 
 
 
     if torch.distributed.get_rank()==0:
         print("Inside load_model_module model_kwargs",model_kwargs,flush=True)
+        print("architecture is ",architecture,"model is",model,flush=True)
 
 
 
+
+    if lat is None and lon is None:
+        raise RuntimeError("Data module has not been set up yet.")
+    # Load the model
+    if architecture is None and model is None:
+        raise RuntimeError("Please specify 'architecture' or 'model'")
+    elif architecture and model is None:
+        print(f"Loading architecture: {architecture}")
+        model  = load_architecture(
+            task, data_module, architecture, **model_kwargs
+        )
 
     elif isinstance(model, str):
-        print(f"Loading model: {model}")
-        model_cls = MODEL_REGISTRY.get(model, None)
-        if model_cls is None:
-            raise NotImplementedError(
-                f"{model} is not an implemented model. If you think it should be,"
-                " please raise an issue at"
-                " https://github.com/aditya-grover/climate-learn/issues."
-            )
-        model = model_cls(**model_kwargs)
+        raise RuntimeError(
+            f"{model} is not an implemented model."
+        )
     elif isinstance(model, nn.Module):
-        print("Using custom network")
+        print("Reuse custom network")
     else:
         raise TypeError("'model' must be str or nn.Module")
+
     # Load the optimizer
     if architecture is None and optim is None:
         raise RuntimeError("Please specify 'architecture' or 'optim'")
-    elif architecture:
-        print("Using optimizer associated with architecture")
+    elif architecture and optim is None:
+        print("Dont do anything with optimizer")
     elif isinstance(optim, str):
-        print(f"Loading optimizer {optim}")
-        optimizer = load_optimizer(model, optim, optim_kwargs)
+        raise RuntimeError("optimzier cannot be string")
     elif isinstance(optim, torch.optim.Optimizer):
         optimizer = optim
-        print("Using custom optimizer")
+        print("return custom optimizer")
     else:
         raise TypeError("'optim' must be str or torch.optim.Optimizer")
     # Load the LR scheduler, if specified
-    if architecture:
-        print("Using learning rate scheduler associated with architecture")
-    elif sched is None:
+    if architecture is None and sched is None:
+        raise RuntimeError("please specify architectur or sched")
+    elif architecture and sched is None:
         lr_scheduler = None
+        print("don't do anything with scheduler")
     elif isinstance(sched, str):
-        print(f"Loading learning rate scheduler: {sched}")
-        lr_scheduler = load_lr_scheduler(sched, optimizer, sched_kwargs)
+        raise RuntimeError("scheduler cannot be string")
     elif isinstance(sched, LRScheduler) or isinstance(
         sched, torch.optim.lr_scheduler.ReduceLROnPlateau
     ):
         lr_scheduler = sched
-        print("Using custom learning rate scheduler")
+        print("Reuse custom learning rate scheduler")
     else:
         raise TypeError(
             "'sched' must be str, None, or torch.optim.lr_scheduler._LRScheduler"
