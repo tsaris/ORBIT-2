@@ -55,10 +55,13 @@ def lat_weighted_quantile(
     loss = torch.abs(losses).mean() 
     return loss
 
+
 @handles_probabilistic
 def image_gradient(
     pred: Pred,
     target: Union[torch.FloatTensor, torch.DoubleTensor],
+    var_names: Optional[List[str]] = None,
+    var_weights: Optional[Dict[str, float]] = None,
     aggregate_only: bool = False,
     lat_weights: Optional[Union[torch.FloatTensor, torch.DoubleTensor]] = None,
 ) -> Union[torch.FloatTensor, torch.DoubleTensor]:
@@ -71,9 +74,7 @@ def image_gradient(
     Returns:
         dict: A dictionary containing the gradient loss.
     """
-
-    mse_error =  torch.mean((pred - target).square())
-    loss = mse_error + .1 *torch.mean(image_gradient_fn(pred, target))
+    loss = mse(pred,target, var_names,var_weights,aggregate_only) + .1 *torch.mean(image_gradient_fn(pred, target))
     return loss
 
 @handles_probabilistic
