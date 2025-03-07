@@ -50,10 +50,10 @@ class NpyReader(IterableDataset):
         total_num_workers = num_workers_per_ddp * world_size
 
         if n_files < total_num_workers:
-            n_multiply = total_num_workers // n_files - 1
-            n_remain = total_num_workers - n_files * (n_multiply + 1)
-            self.inp_file_list = self.inp_file_list + self.inp_file_list * n_multiply + self.inp_file_list[:n_remain]
-            self.out_file_list = self.out_file_list + self.out_file_list * n_multiply + self.out_file_list[:n_remain]
+            n_multiply = total_num_workers // n_files
+            n_remain = total_num_workers - n_files * n_multiply
+            self.inp_file_list = self.inp_file_list * n_multiply + self.inp_file_list[:n_remain]
+            self.out_file_list = self.out_file_list * n_multiply + self.out_file_list[:n_remain]
             n_files = len(self.inp_file_list)
 
         worker_info = torch.utils.data.get_worker_info()
