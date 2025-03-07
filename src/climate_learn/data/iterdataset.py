@@ -43,6 +43,19 @@ class NpyReader(IterableDataset):
 
         n_files = len(self.inp_file_list)
 
+        ## Wrap-around filelist if files < processes.
+        world_size = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
+        worker_info = torch.utils.data.get_worker_info()
+        num_workers_per_ddp = worker_info.num_workers if worker_info is not None else 1
+        total_num_workers = num_workers_per_ddp * world_size
+
+        if n_files < total_num_workers:
+            n_multiply = total_num_workers // n_files
+            n_remain = total_num_workers - n_files * n_multiply
+            self.inp_file_list = self.inp_file_list * n_multiply + self.inp_file_list[:n_remain]
+            self.out_file_list = self.out_file_list * n_multiply + self.out_file_list[:n_remain]
+            n_files = len(self.inp_file_list)
+
         worker_info = torch.utils.data.get_worker_info()
         if worker_info is None:
             rank = torch.distributed.get_rank()

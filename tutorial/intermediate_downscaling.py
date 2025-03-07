@@ -125,6 +125,7 @@ def training_step(
     batch_idx,
     net,
     device: int,
+    var_weights,
     train_loss_metric) -> torch.Tensor:
     x, y, in_variables, out_variables = batch
     x = x.to(device)
@@ -134,10 +135,10 @@ def training_step(
     yhat = replace_constant(y, yhat, out_variables)
 
     if y.size(dim=2)!=yhat.size(dim=2) or y.size(dim=3)!=yhat.size(dim=3):
-        losses = train_loss_metric(yhat, y[:,:,0:yhat.size(dim=2),0:yhat.size(dim=3)])
+        losses = train_loss_metric(yhat, y[:,:,0:yhat.size(dim=2),0:yhat.size(dim=3)], var_names = out_variables, var_weights=var_weights)
     else:
 
-        losses = train_loss_metric(yhat, y)
+        losses = train_loss_metric(yhat, y, var_names = out_variables, var_weights=var_weights)
     loss_name = getattr(train_loss_metric, "name", "loss")
     if losses.dim() == 0:  # aggregate loss only
         loss = losses
@@ -243,6 +244,7 @@ def main(device):
     low_res_dir = conf['data']['low_res_dir']
     high_res_dir = conf['data']['high_res_dir']
     preset = conf['model']['preset']
+    var_weights = conf['data']['var_weights']
     dict_out_variables = conf['data']['dict_out_variables']
     dict_in_variables = conf['data']['dict_in_variables']
     default_vars =  conf['data']['default_vars']
