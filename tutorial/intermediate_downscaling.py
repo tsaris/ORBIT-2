@@ -494,7 +494,7 @@ def main(device):
     
                     #timer.begin("training_step")
                     ## torch.Size([64, 20, 32, 64]), torch.Size([64, 1, 128, 256])
-                    loss = training_step(batch, batch_idx,model,device,train_loss)
+                    loss = training_step(batch, batch_idx,model,device,var_weights,train_loss)
                     #timer.end("training_step")
     
                     epoch_loss += loss.detach()
