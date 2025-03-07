@@ -1,9 +1,9 @@
 #-----------   TRAINER -------------
 trainer:
   max_epochs: 100
-  checkpoint: 
-  pretrain:
-  batch_size: 64
+  checkpoint:
+  pretrain: "checkpoints/climate/precipitation_era5.ckpt"
+  batch_size: 32
   buffer_size: 400
   num_workers: 2
 
@@ -11,7 +11,7 @@ trainer:
 # ---------------------------- MODEL -------------------------------------------
 model:
   preset: res_slimvit
-  lr: 2e-3
+  lr: 5e-4
   weight_decay: 1e-5
   beta_1: 0.9
   beta_2: 0.99

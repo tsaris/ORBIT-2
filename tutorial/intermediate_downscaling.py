@@ -41,12 +41,42 @@ from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed
 from climate_learn.dist.profile import *
 
 
-def load_pretrained_weights(model, pretrained_path, device,data_key):
+def load_checkpoint_pretrain(model, checkpoint_path, pretrain_path):
+    #load model checkpoint
+    if checkpoint_path is not None:
+        if os.path.exists(checkpoint_path):
+            print("model resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
+
+            #map_location = 'cuda:'+str(device)
+            map_location = 'cpu'
+
+            checkpoint = torch.load(checkpoint_path,map_location=map_location)
+            model.load_state_dict(checkpoint['model_state_dict'])
+
+            del checkpoint
+        else:
+            print("resume from checkpoint was set to True. But the checkpoint path does not exist.",flush=True)
+
+            sys.exit("checkpoint path does not exist")
+
+    #load pretrained model
+    if pretrain_path is not None:
+        if os.path.exists(pretrain_path):
+            print("load pretrained model",pretrain_path," Pretrain path found.",flush=True)
+            _load_pretrained_weights(model,pretrain_path,device)  
+        else:
+            print("resume from pretrained model was set to True. But the pretrained model path does not exist.",flush=True)
+
+            sys.exit("pretrain path does not exist")
+
+
+
+def _load_pretrained_weights(model, pretrain_path, device):
     # map_location = 'cuda:'+str(device)
     map_location = 'cpu'
-    checkpoint = torch.load(pretrained_path, map_location=map_location)
+    checkpoint = torch.load(pretrain_path, map_location=map_location)
 
-    print("Loading pre-trained checkpoint from: %s" % pretrained_path)
+    print("Loading pre-trained checkpoint from: %s" % pretrain_path)
     pretrain_model = checkpoint["model_state_dict"]
 
     del checkpoint
@@ -259,289 +289,310 @@ def main(device):
     if checkpoint_path is not None and pretrain_path is not None:
         pretrain_path = None
 
-    # Set up data
 
-    data_key = "PRISM"
-    in_vars = dict_in_variables[data_key]
-    out_vars = dict_out_variables[data_key]
+    model = None
 
-    
-    if world_rank==0:
-        print("in_vars",in_vars,flush=True)
-        print("out_vars",out_vars,flush=True)
-        print("default_vars",default_vars,flush=True)
+    first_time_bool = True
 
-    #load data module
-    data_module = cl.data.IterDataModule(
-        "downscaling",
-        low_res_dir[data_key],
-        high_res_dir[data_key],
-        in_vars,
-        out_vars=out_vars,
-        subsample=1,
-        batch_size=batch_size,
-        buffer_size=buffer_size,
-        num_workers=num_workers,
-    ).to(device)
-    data_module.setup()
-
-    # Set up deep learning model
-    model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms = cl.load_downscaling_module(device,data_module=data_module, architecture=preset,model_kwargs=model_kwargs)
-  
-    if dist.get_rank()==0:
-        print("train_loss",train_loss,"train_transform",train_transform,"val_losses",val_losses,"val_transforms",val_transforms,flush=True)
-
-    model = model.to(device)
-
-
-    model.update_spatial_resolution(spatial_resolution[data_key]) 
-
-
-
-    #load model checkpoint
-    if checkpoint_path is not None:
-        if os.path.exists(checkpoint_path):
-            print("model resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
-
-            #map_location = 'cuda:'+str(device)
-            map_location = 'cpu'
-
-            checkpoint = torch.load(checkpoint_path,map_location=map_location)
-            model.load_state_dict(checkpoint['model_state_dict'])
-
-            del checkpoint
-        else:
-            print("resume from checkpoint was set to True. But the checkpoint path does not exist.",flush=True)
-
-            sys.exit("checkpoint path does not exist")
-
-    #load pretrained model
-    if pretrain_path is not None:
-        if os.path.exists(pretrain_path):
-            print("load pretrained model",pretrain_path," Pretrain path found.",flush=True)
-            load_pretrained_weights(model,pretrain_path,device,data_key)  
-        else:
-            print("resume from pretrained model was set to True. But the pretrained model path does not exist.",flush=True)
-
-            sys.exit("pretrain path does not exist")
-
-
-
-    seed_everything(0)
-
-    #set up layer wrapping
-    if preset =="vit" or preset=="res_slimvit":
-   
-        auto_wrap_policy = functools.partial(
-            transformer_auto_wrap_policy,
-            transformer_layer_cls={
-                Block, Sequential # < ---- Your Transformer layer class
-            },
-        )
-
-        check_fn = lambda submodule: isinstance(submodule, Block)  or isinstance(submodule,Sequential)
-
-
-
-    #bfloat16 policy
-    bfloatPolicy = MixedPrecision(
-        param_dtype=torch.bfloat16,
-        # Gradient communication precision.
-        reduce_dtype=torch.bfloat16,
-        # Buffer precision.
-        buffer_dtype=torch.bfloat16,
-    )
-
-
-
-    #fully sharded FSDP
-
-    model = FSDP(model, device_id = local_rank, process_group= None,sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.FULL_SHARD,auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False)
-
-
-
-    #model = DDP(model, device_ids=[local_rank], output_device=[local_rank]) 
-
-    #activation checkpointing
-    apply_activation_checkpointing(
-        model, checkpoint_wrapper_fn=checkpoint_wrapper, check_fn=check_fn
-    )
-
-
-    if torch.distributed.get_rank()==0:
-        print("model is ",model,flush=True)
-
-
-
-
-    #load optimzier and scheduler
-
-
-    optimizer = cl.load_optimizer(
-	model, "adamw", {"lr": lr, "weight_decay": weight_decay, "betas": (beta_1, beta_2)}
-    )
-
-    scheduler = cl.load_lr_scheduler(
-	"linear-warmup-cosine-annealing",
-	optimizer,
-	{
-	    "warmup_epochs": warmup_epochs,  
-	    "max_epochs": max_epochs,
-	    "warmup_start_lr": warmup_start_lr,
-	    "eta_min": eta_min,
-	},
-    )
-
+    interval_epochs = 1
 
     epoch_start = 0
-    if checkpoint_path is not None:
-
-        print("optimizer resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
-
-        #map_location = 'cuda:'+str(device)
-        map_location = 'cpu'
-
-        checkpoint = torch.load(checkpoint_path,map_location=map_location)
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        epoch_start = checkpoint['epoch']+1
-
-        del checkpoint
 
 
+    while (epoch_start+interval_epochs) < max_epochs:
 
-    #get latitude and longitude
-    lat, lon = data_module.get_lat_lon()
-
-    # get train data loader
-    train_dataloader = data_module.train_dataloader()
-
-    # get validation data loader
-    val_dataloader = data_module.val_dataloader()
-
-
-    ## GPTL Timer
-    #dist.barrier()
-    #timer = ProfileTimer()
-
-    #perform training
-    for epoch in range(epoch_start,max_epochs):
+        for data_key in low_res_dir.keys():
+            # Set up data
     
-        #tell the model that we are in train mode. Matters because we have the dropout
-        model.train()
-        #timer.begin("epoch")
-        loss = 0.0
-        epoch_loss = torch.tensor(0.0 , dtype=torch.float32, device=device)
-        if world_rank==0:
-            print("epoch ",epoch,flush=True)
+            in_vars = dict_in_variables[data_key]
+            out_vars = dict_out_variables[data_key]
     
-        #timer.begin("dataload")
-        for batch_idx, batch in enumerate(train_dataloader):
-            #timer.end("dataload")
-
+        
             if world_rank==0:
-                torch.cuda.synchronize(device=device)
-                tic1 = time.perf_counter() 
-
-            #timer.begin("training_step")
-            ## torch.Size([64, 20, 32, 64]), torch.Size([64, 1, 128, 256])
-            loss = training_step(batch, batch_idx,model,device,var_weights, train_loss)
-            #timer.end("training_step")
-
-            epoch_loss += loss.detach()
+                print("***************************",flush=True)
+                print("data_key is ",data_key,flush=True)
+                print("in_vars",in_vars,flush=True)
+                print("out_vars",out_vars,flush=True)
+                print("default_vars",default_vars,flush=True)
+                print("before data_module torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
     
-            if world_rank==0:
-                print("epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," loss ",loss,flush=True)
-    
-            optimizer.zero_grad()
-            #timer.begin("backward")
-            loss.backward()
-            #timer.end("backward")
-            #timer.begin("optimizer_step")
-            optimizer.step()
-            #timer.end("optimizer_step")
-
-    
-            if world_rank==0:
-                print("rank",world_rank,"batch_idx",batch_idx,"get_lr ",scheduler.get_lr(),"after optimizer step torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
-
-
-            if world_rank==0:
-                torch.cuda.synchronize(device=device)
-                tic4 = time.perf_counter() 
-                print(f"my rank {dist.get_rank()}. tic4-tic1 in {(tic4-tic1):0.4f} seconds\n",flush=True)
-
-            #timer.begin("dataload")
-
-        #if timer.isactive("dataload"):
-        #    timer.end("dataload")
-
-        scheduler.step()
-        #timer.end("epoch")
-    
-        if world_rank==0:
-            print("epoch: ",epoch," epoch_loss ",epoch_loss,flush=True)
-
-
-
-        if world_rank ==0:    
-            checkpoint_path = "checkpoints/climate" 
-            # Check whether the specified checkpointing path exists or not
-            isExist = os.path.exists(checkpoint_path)
-            if not isExist:
-                # Create a new directory because it does not exist
-                os.makedirs(checkpoint_path)
-                print("The new checkpoint directory is created!")        
-
-
-        print("rank",world_rank,"Before torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
-
-
-        model_states = model.state_dict()
-        optimizer_states = optimizer.state_dict()
-        scheduler_states = scheduler.state_dict()
-
-        if world_rank == 0 :
      
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model_states,
-                'optimizer_state_dict': optimizer_states,
-                'scheduler_state_dict': scheduler_states,
-                }, checkpoint_path+"/"+"interm"+"_rank_"+str(world_rank)+"_epoch_"+ str(epoch) +".ckpt")
-     
-        print("rank",world_rank,"After torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
-
-        dist.barrier()
-        del model_states
-        del optimizer_states
-        del scheduler_states
-
-
-        #perform validation
-        if epoch%2==0:
-            with torch.no_grad():
-                #tell the model that we are in eval mode. Matters because we have the dropout
-                model.eval()
-
+    
+    
+    
+            #load data module
+            data_module = cl.data.IterDataModule(
+                "downscaling",
+                low_res_dir[data_key],
+                high_res_dir[data_key],
+                in_vars,
+                out_vars=out_vars,
+                subsample=1,
+                batch_size=batch_size,
+                buffer_size=buffer_size,
+                num_workers=num_workers,
+            ).to(device)
+            data_module.setup()
+    
+            if world_rank==0:
+                print("after data_module torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
+    
+            if first_time_bool:
+                # Set up deep learning model
+                model, train_loss,val_losses,test_losses,train_transform,val_transforms,test_transforms = cl.load_downscaling_module(device,model=model, data_module=data_module, architecture=preset,model_kwargs=model_kwargs)
+      
+                if dist.get_rank()==0:
+                    print("train_loss",train_loss,"train_transform",train_transform,"val_losses",val_losses,"val_transforms",val_transforms,flush=True)
+    
+                model = model.to(device)
+    
+    
+    
+    
+                if torch.distributed.get_rank()==0:
+                    print("before load_checkpoint_pretrain model is",flush=True)
+                    for name, param in model.named_parameters():
+                        print(name, param.data.shape)
+    
+                # load from checkpoint for continued training , or from pretrained model weights
+                load_checkpoint_pretrain(model, checkpoint_path, pretrain_path)
+    
+    
+    
+                if torch.distributed.get_rank()==0:
+                    print("after load_checkpoint_pretrain model is",flush=True)
+                    for name, param in model.named_parameters():
+                        print(name, param.data.shape)
+    
+    
+                seed_everything(0)
+    
+    
+    
+                #set up layer wrapping
+                if preset =="vit" or preset=="res_slimvit":
+       
+                    auto_wrap_policy = functools.partial(
+                        transformer_auto_wrap_policy,
+                        transformer_layer_cls={
+                            Block, Sequential # < ---- Your Transformer layer class
+                        },
+                    )
+    
+                    check_fn = lambda submodule: isinstance(submodule, Block)  or isinstance(submodule,Sequential)
+    
+                #bfloat16 policy
+                bfloatPolicy = MixedPrecision(
+                    param_dtype=torch.bfloat16,
+                    # Gradient communication precision.
+                    reduce_dtype=torch.bfloat16,
+                    # Buffer precision.
+                    buffer_dtype=torch.bfloat16,
+                )
+    
+                #fully sharded FSDP
+                model = FSDP(model, device_id = local_rank, process_group= None,sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.FULL_SHARD,auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False)
+    
+    
+    
+    
+    
+            #update spatial resolution, image size, and # variables to model based on datasets
+            in_shape, _ = data_module.get_data_dims()
+            _, in_height, in_width = in_shape[1:]
+    
+            with FSDP.summon_full_params(model):
+                model.data_config(spatial_resolution[data_key],(in_height, in_width),len(in_vars),len(out_vars)) 
+            
+    
+    
+    
+            with FSDP.summon_full_params(model):
+                if torch.distributed.get_rank()==0:
+                    print("outside data_config spatial resol is ",model.module.spatial_resolution,"img_size",model.module.img_size,"in_channels",model.module.in_channels,"out_channels",model.module.out_channels,"num_patches",model.module.num_patches,flush=True)
+    
+    
+    
+    
+            if first_time_bool:
+                #activation checkpointing
+                apply_activation_checkpointing(
+                    model, checkpoint_wrapper_fn=checkpoint_wrapper, check_fn=check_fn
+                )
+    
+                #load optimzier and scheduler
+    
+    
+                optimizer = cl.load_optimizer(
+	            model, "adamw", {"lr": lr, "weight_decay": weight_decay, "betas": (beta_1, beta_2)}
+                )
+    
+                scheduler = cl.load_lr_scheduler(
+	            "linear-warmup-cosine-annealing",
+	            optimizer,
+	            {
+	                "warmup_epochs": warmup_epochs,  
+	                "max_epochs": max_epochs,
+	                "warmup_start_lr": warmup_start_lr,
+	                "eta_min": eta_min,
+	            },
+                )
+    
+    
+    
+                if checkpoint_path is not None:
+    
+                    print("optimizer resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
+    
+                    #map_location = 'cuda:'+str(device)
+                    map_location = 'cpu'
+    
+                    checkpoint = torch.load(checkpoint_path,map_location=map_location)
+                    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+                    scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+                    epoch_start = checkpoint['epoch']+1
+                    del checkpoint
+    
+            #get latitude and longitude
+            lat, lon = data_module.get_lat_lon()
+    
+            # get train data loader
+            train_dataloader = data_module.train_dataloader()
+    
+            # get validation data loader
+            val_dataloader = data_module.val_dataloader()
+    
+    
+    
+    
+            ## GPTL Timer
+            #dist.barrier()
+            #timer = ProfileTimer()
+    
+            #perform training
+    
+            epoch_end = epoch_start+interval_epochs
+            epoch_end = epoch_end if epoch_end<max_epochs else max_epochs      
+    
+            for epoch in range(epoch_start,epoch_end):
+        
+                #tell the model that we are in train mode. Matters because we have the dropout
+                model.train()
+                #timer.begin("epoch")
+                loss = 0.0
+                epoch_loss = torch.tensor(0.0 , dtype=torch.float32, device=device)
                 if world_rank==0:
-                    print("val epoch ",epoch,flush=True)
+                    print("epoch ",epoch,flush=True)
     
-                for batch_idx, batch in enumerate(val_dataloader):
-
+                #timer.begin("dataload")
+                for batch_idx, batch in enumerate(train_dataloader):
+                #timer.end("dataload")
+    
                     if world_rank==0:
                         torch.cuda.synchronize(device=device)
                         tic1 = time.perf_counter() 
-
-                    losses = validation_step(batch, batch_idx,model,device,val_losses,val_transforms)
+    
+                    #timer.begin("training_step")
+                    ## torch.Size([64, 20, 32, 64]), torch.Size([64, 1, 128, 256])
+                    loss = training_step(batch, batch_idx,model,device,train_loss)
+                    #timer.end("training_step")
+    
+                    epoch_loss += loss.detach()
+        
+                    if world_rank==0:
+                        print("epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," loss ",loss,flush=True)
+        
+                    optimizer.zero_grad()
+                    #timer.begin("backward")
+                    loss.backward()
+                    #timer.end("backward")
+                    #timer.begin("optimizer_step")
+                    optimizer.step()
+                    #timer.end("optimizer_step")
+    
+        
+                    if world_rank==0:
+                        print("rank",world_rank,"batch_idx",batch_idx,"get_lr ",scheduler.get_lr(),"after optimizer step torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
+    
     
                     if world_rank==0:
-                        print("val epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," losses ",losses,flush=True)
-           
                         torch.cuda.synchronize(device=device)
                         tic4 = time.perf_counter() 
                         print(f"my rank {dist.get_rank()}. tic4-tic1 in {(tic4-tic1):0.4f} seconds\n",flush=True)
     
+    
+                scheduler.step()
+                #timer.end("epoch")
+        
+                if world_rank==0:
+                    print("epoch: ",epoch," epoch_loss ",epoch_loss,flush=True)
+    
+   
+                if world_rank ==0:    
+                    checkpoint_path = "checkpoints/climate" 
+                    # Check whether the specified checkpointing path exists or not
+                    isExist = os.path.exists(checkpoint_path)
+                    if not isExist:
+                        # Create a new directory because it does not exist
+                        os.makedirs(checkpoint_path)
+                        print("The new checkpoint directory is created!")        
+        
+        
+                print("rank",world_rank,"Before torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
+        
+        
+                model_states = model.state_dict()
+                optimizer_states = optimizer.state_dict()
+                scheduler_states = scheduler.state_dict()
+        
+                if world_rank == 0 :
+             
+                    torch.save({
+                        'epoch': epoch,
+                        'model_state_dict': model_states,
+                        'optimizer_state_dict': optimizer_states,
+                        'scheduler_state_dict': scheduler_states,
+                        }, checkpoint_path+"/"+"interm"+"_rank_"+str(world_rank)+"_epoch_"+ str(epoch) +".ckpt")
+             
+                print("rank",world_rank,"After torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
+        
+                dist.barrier()
+                del model_states
+                del optimizer_states
+                del scheduler_states
+    
+                #perform validation
+                if epoch%2==0:
+                    with torch.no_grad():
+                        #tell the model that we are in eval mode. Matters because we have the dropout
+                        model.eval()
+        
+                        if world_rank==0:
+                            print("val epoch ",epoch,flush=True)
+            
+                        for batch_idx, batch in enumerate(val_dataloader):
+        
+                            if world_rank==0:
+                                torch.cuda.synchronize(device=device)
+                                tic1 = time.perf_counter() 
+        
+                            losses = validation_step(batch, batch_idx,model,device,val_losses,val_transforms)
+            
+                            if world_rank==0:
+                                print("val epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," losses ",losses,flush=True)
+                   
+                                torch.cuda.synchronize(device=device)
+                                tic4 = time.perf_counter() 
+                                print(f"my rank {dist.get_rank()}. tic4-tic1 in {(tic4-tic1):0.4f} seconds\n",flush=True)
+         
+ 
+    
+            epoch_start = epoch_end
+    
+            if first_time_bool:
+                first_time_bool = False
+    
+
 
 
 if __name__ == "__main__":

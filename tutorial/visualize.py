@@ -157,35 +157,15 @@ if preset!="vit" and preset!="res_slimvit":
 
 
 # Set up data
-data_key = "PRISM"
+data_key = "ERA5_1"
 
-in_temp = dict_in_variables[data_key]
-in_vars = []
-    
-for var in in_temp:
-    if var in PRESSURE_LEVEL_VARS:
-        default_vars.remove(var)
-        for level in DEFAULT_PRESSURE_LEVELS:
-            in_vars.append(var + "_" + str(level))
-            default_vars.append(var + "_" + str(level))
-    else:
-        in_vars.append(var)
-
-out_temp = dict_out_variables[data_key]
-out_vars = []
-
-for var in out_temp:
-    if var in PRESSURE_LEVEL_VARS:
-        for level in DEFAULT_PRESSURE_LEVELS:
-            out_vars.append(var + "_" + str(level))
-    else:
-        out_vars.append(var)
-
+in_vars = dict_in_variables[data_key]
+out_vars = dict_out_variables[data_key]
+ 
 
 if world_rank==0:
     print("in_vars",in_vars,flush=True)
     print("out_vars",out_vars,flush=True)
-    print("updated default_vars",default_vars,flush=True)
  
 
 
@@ -221,7 +201,7 @@ denorm = test_transforms[0]
 
 print("denorm is ",denorm,flush=True)
 
-checkpoint_file = "./checkpoints/climate/interm_rank_0_epoch_22.ckpt"
+checkpoint_file = "./checkpoints/climate/interm_rank_0_epoch_51.ckpt"
 
 
 #load pretrained model
@@ -254,7 +234,7 @@ cl.utils.visualize.visualize_at_index(
     out_list=out_vars,
     in_transform=denorm,
     out_transform=denorm,
-    variable="prcp",
+    variable="total_precipitation",
     src=data_key,
     device = device,
     index=0,  # visualize the first sample of the test set

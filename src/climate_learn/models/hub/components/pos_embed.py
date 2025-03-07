@@ -86,7 +86,8 @@ def interpolate_pos_embed(model, checkpoint_model, new_size=(64, 128)):
         # print (orig_size)
         # print (new_size)
         if orig_size[0] != new_size[0]:
-            print("Interpolate PEs from %dx%d to %dx%d" % (orig_size[0], orig_size[1], new_size[0], new_size[1]))
+            if torch.distributed.get_rank()==0:
+                print("Checkpoint interpolate PEs from %dx%d to %dx%d" % (orig_size[0], orig_size[1], new_size[0], new_size[1]))
             pos_tokens = pos_embed_checkpoint.reshape(-1, orig_size[0], orig_size[1], embedding_size).permute(
                 0, 3, 1, 2
             )
@@ -95,4 +96,45 @@ def interpolate_pos_embed(model, checkpoint_model, new_size=(64, 128)):
             )
             new_pos_tokens = new_pos_tokens.permute(0, 2, 3, 1).flatten(1, 2)
             checkpoint_model["pos_embed"] = new_pos_tokens
+
+            del new_pos_tokens
+
+
+def interpolate_pos_embed_on_the_fly(pos_embed, patch_size, new_size=(64, 128)):
+
+
+    embedding_size = pos_embed.shape[-1]
+    orig_num_patches = pos_embed.shape[-2]
+    w_h_ratio = 2
+    orig_h = int((orig_num_patches // w_h_ratio) ** 0.5)
+    orig_w = w_h_ratio * orig_h
+    orig_size = (orig_h, orig_w)
+    new_size = (new_size[0] // patch_size, new_size[1] // patch_size)
+
+
+    #if torch.distributed.get_rank()==0:
+    #    print("orig_size",orig_size,"new_size",new_size,flush=True)
+
+
+    if orig_size[0] != new_size[0]:
+        #if torch.distributed.get_rank()==0:
+#            print("interpolate on the fly PEs from %dx%d to %dx%d" % (orig_size[0], orig_size[1], new_size[0], new_size[1]))
+#            print("pos_embed.shape",pos_embed.shape,"pos_embed.reshape(-1, orig_size[0], orig_size[1], embedding_size).shape", pos_embed.reshape(-1, orig_size[0], orig_size[1], embedding_size).shape,flush=True)
+
+
+        pos_tokens = pos_embed.reshape(-1, orig_size[0], orig_size[1], embedding_size).permute(0, 3, 1, 2)
+
+ #       if torch.distributed.get_rank()==0:
+ #           print("pos_tokens.shape",pos_tokens.shape,flush=True)
+
+        new_pos_tokens = torch.nn.functional.interpolate(
+            pos_tokens, size=(new_size[0], new_size[1]), mode="bicubic", align_corners=False
+        )
+        new_pos_tokens = new_pos_tokens.permute(0, 2, 3, 1).flatten(1, 2)
+
+        return new_pos_tokens
+
+    else:
+        return pos_embed
+
 

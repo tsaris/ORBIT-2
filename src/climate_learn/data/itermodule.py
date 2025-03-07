@@ -186,6 +186,8 @@ class IterDataModule(torch.nn.Module):
         for var in self.out_vars:
             if var == "2m_temperature_extreme_mask":
                 continue
+            if  "ERA5-1hr-superres/1.0_deg" in self.inp_root_dir and var == "total_precipitation":
+                var = "total_precipitation_6hr"
             new_clim_dict[var] = torch.from_numpy(
                 np.squeeze(clim_dict[var].astype(np.float32), axis=0)
             )
