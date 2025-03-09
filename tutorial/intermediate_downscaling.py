@@ -131,7 +131,7 @@ def training_step(
     x = x.to(device)
     y = y.to(device)
         
-    yhat = net.forward(x,in_variables)
+    yhat = net.forward(x,in_variables,out_variables)
     yhat = replace_constant(y, yhat, out_variables)
 
     if y.size(dim=2)!=yhat.size(dim=2) or y.size(dim=3)!=yhat.size(dim=3):
@@ -172,7 +172,7 @@ def evaluate_func(
     x = x.to(device)
     y = y.to(device)
  
-    yhat = net.forward(x, in_variables)
+    yhat = net.forward(x, in_variables,out_variables)
     yhat = replace_constant(y, yhat, out_variables)
 
     if stage == "val":
@@ -494,7 +494,7 @@ def main(device):
     
                     #timer.begin("training_step")
                     ## torch.Size([64, 20, 32, 64]), torch.Size([64, 1, 128, 256])
-                    loss = training_step(batch, batch_idx,model,device,train_loss)
+                    loss = training_step(batch, batch_idx,model,device,var_weights,train_loss)
                     #timer.end("training_step")
     
                     epoch_loss += loss.detach()
