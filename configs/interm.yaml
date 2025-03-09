@@ -1,6 +1,6 @@
 #-----------   TRAINER -------------
 trainer:
-  max_epochs: 3
+  max_epochs: 100
   checkpoint:
   pretrain:
   batch_size: 64
