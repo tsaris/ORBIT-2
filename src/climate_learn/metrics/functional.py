@@ -74,7 +74,23 @@ def image_gradient(
     Returns:
         dict: A dictionary containing the gradient loss.
     """
-    loss = mse(pred,target, var_names,var_weights,aggregate_only) + .1 *torch.mean(image_gradient_fn(pred, target))
+
+    error_1 = (pred - target).square()
+    error_2 = image_gradient_fn(pred, target)
+
+    if var_names is not None:
+        assert len(var_names) == pred.shape[1], "Number of variable names must match channel dimension"
+
+        channel_weights = torch.ones(pred.shape[1], device=pred.device, dtype=pred.dtype)
+        for i, var in enumerate(var_names):
+            weight = var_weights.get(var, 1.0)
+            channel_weights[i] = weight
+        weights_expanded = channel_weights.view(1, -1, 1, 1)
+        error_1 = error_1 * weights_expanded
+        error_2 = error_2 * weights_expanded
+
+    loss = torch.mean(error_1) + 0.1*torch.mean(error_2)
+
     return loss
 
 @handles_probabilistic

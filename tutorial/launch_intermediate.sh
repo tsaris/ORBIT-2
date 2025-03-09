@@ -1,14 +1,14 @@
 #!/bin/bash
 #SBATCH -A lrn036
 #SBATCH -J flash
-#SBATCH --nodes=1
+#SBATCH --nodes=2
 #SBATCH --gres=gpu:8
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
-#SBATCH -t 00:30:00
+#SBATCH -t 01:00:00
 #SBATCH -q debug
 #SBATCH -o flash-%j.out
-#SBATCH -e flash-%j.out
+#SBATCH -e flash-%j.error
 
 [ -z $JOBID ] && JOBID=$SLURM_JOB_ID
 [ -z $JOBSIZE ] && JOBSIZE=$SLURM_JOB_NUM_NODES

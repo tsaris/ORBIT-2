@@ -90,9 +90,8 @@ class Res_Slim_ViT(nn.Module):
         self.norm = nn.LayerNorm(embed_dim)
 
         #skip connection path
-        self.skip_to_img = nn.Linear(embed_dim,patch_size**2)
         self.path2 = nn.ModuleList()
-        self.path2.append(nn.Conv2d(in_channels=1, out_channels=cnn_ratio*superres_mag*superres_mag, kernel_size=(3, 3), stride=1, padding=1)) 
+        self.path2.append(nn.Conv2d(in_channels=out_channels, out_channels=cnn_ratio*superres_mag*superres_mag, kernel_size=(3, 3), stride=1, padding=1)) 
         self.path2.append(nn.GELU())
         self.path2.append(nn.PixelShuffle(superres_mag))
         self.path2.append(nn.Conv2d(in_channels=cnn_ratio, out_channels=out_channels, kernel_size=(3, 3), stride=1, padding=1)) 
@@ -215,16 +214,15 @@ class Res_Slim_ViT(nn.Module):
         return x
 
 
-    def residual_connection(self,x:torch.Tensor):
+    def residual_connection(self,x:torch.Tensor,out_var_index):
         """
-         x: B, L, D
+         x: B, in channels, H, W
         """
-        x = self.skip_to_img(x)
-        #x: B, L, patch_size* patch_size
-        x = self.unpatchify(x,scaling=1, out_channels=1)
-        #x: B,1, H, W
+        x = x[:,out_var_index,:,:]
+
+        #x: B,out channels, H, W
         path2_result = self.path2(x)
-        #x: B, output channels, H, W
+        #x: B, output channels, H*mag, W*mag
         return path2_result
 
 
@@ -255,8 +253,6 @@ class Res_Slim_ViT(nn.Module):
         #if torch.distributed.get_rank()==0:
         #    print("after patch_embed x.shape",x.shape,flush=True)
 
-        path2_result = self.residual_connection(x)     
-
 
         pos_emb = interpolate_pos_embed_on_the_fly(self.pos_embed,self.patch_size,self.img_size)
 
@@ -276,16 +272,24 @@ class Res_Slim_ViT(nn.Module):
             x = blk(x)
         # x.shape = [B,num_patches,embed_dim]
         x = self.norm(x)
-        return x, path2_result
+        return x
+
+    
+    def find_var_index(self,in_variables,out_variables):
+        return [in_variables.index(variable) for variable in out_variables] 
 
 
-    def forward(self, x, in_variables):
+
+    def forward(self, x, in_variables,out_variables):
         if len(x.shape) == 5:  # x.shape = [B,T,in_channels,H,W]
             x = x.flatten(1, 2)
         # x.shape = [B,T*in_channels,H,W]
 
+        out_var_index = self.find_var_index(in_variables,out_variables)
 
-        x, path2_result = self.forward_encoder(x, in_variables)
+        path2_result = self.residual_connection(x,out_var_index)     
+
+        x = self.forward_encoder(x, in_variables)
 
         # x.shape = [B,num_patches,embed_dim]
 

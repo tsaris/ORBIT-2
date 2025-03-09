@@ -197,13 +197,7 @@ class IMAGEGRADIENT(Metric):
         var_names: Optional[List[str]] = None,
         var_weights: Optional[Dict[str, float]] = None
     ) -> Union[torch.FloatTensor, torch.DoubleTensor]:
-        return image_gradient(
-            pred, 
-            target,
-            var_names,
-            var_weights,
-            self.aggregate_only
-        )
+        return image_gradient(pred, target,var_names,var_weights)
 
 
 
