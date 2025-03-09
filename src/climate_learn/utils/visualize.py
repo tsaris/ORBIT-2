@@ -36,14 +36,16 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
 
     counter = 0
     adj_index = None
-    for batch in dm.train_dataloader():
+    for batch in dm.test_dataloader():
         x, y = batch[:2]
         in_variables = batch[2]
+        out_variables = batch[3]
+
         batch_size = x.shape[0]
         if index in range(counter, counter + batch_size):
             adj_index = index - counter
             x = x.to(device)
-            pred = mm.forward(x,in_variables)
+            pred = mm.forward(x,in_variables,out_variables)
 
             print("x.shape",x.shape,"y.shape",y.shape,"pred.shape",pred.shape,flush=True)
 
@@ -76,8 +78,8 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     img_max = np.max(img)
 
 
-    plt.figure(figsize=(img.shape[1]/100,img.shape[0]/100))
-    plt.imshow(img,cmap='viridis',vmin=img_min,vmax=img_max)
+    plt.figure(figsize=(img.shape[1]/10,img.shape[0]/10))
+    plt.imshow(img,cmap='coolwarm',vmin=img_min,vmax=img_max)
     anim = None
     plt.show()
     plt.savefig('input.png')
@@ -97,8 +99,8 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     ppred_max = np.max(ppred)
 
 
-    plt.figure(figsize=(ppred.shape[1]/100,ppred.shape[0]/100))
-    plt.imshow(ppred,cmap='viridis',vmin=img_min,vmax=img_max)
+    plt.figure(figsize=(ppred.shape[1]/10,ppred.shape[0]/10))
+    plt.imshow(ppred,cmap='coolwarm',vmin=img_min,vmax=img_max)
     plt.show()
     plt.savefig('prediction.png')
 
@@ -122,8 +124,8 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     if yy.shape[0]!=ppred.shape[0] or yy.shape[1]!=ppred.shape[1]:
         yy= yy[0:ppred.shape[0],0:ppred.shape[1]]
 
-    plt.figure(figsize=(yy.shape[1]/100,yy.shape[0]/100))
-    plt.imshow(yy,cmap='viridis',vmin=img_min,vmax=img_max)
+    plt.figure(figsize=(yy.shape[1]/10,yy.shape[0]/10))
+    plt.imshow(yy,cmap='coolwarm',vmin=img_min,vmax=img_max)
     plt.show()
     plt.savefig('groundtruth.png')
 
