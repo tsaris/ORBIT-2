@@ -16,25 +16,20 @@
 
 #ulimit -n 65536
 
-
+module load PrgEnv-gnu
+module load rocm/6.2.4
+module unload darshan-runtime
+module unload libfabric
 
 source ~/miniconda3/etc/profile.d/conda.sh
 
-module load PrgEnv-gnu
-module load gcc/12.2.0
-module load rocm/6.2.0
+eval "$(/lustre/orion/world-shared/lrn036/jyc/frontier/sw/anaconda3/2023.09/bin/conda shell.bash hook)"
 
+conda activate /lustre/orion/lrn036/world-shared/xf9/torch26
 
-
-eval "$(/lustre/orion/world-shared/stf218/atsaris/env_test_march/miniconda/bin/conda shell.bash hook)"
-
-conda activate /lustre/orion/lrn036/world-shared/xf9/flash-attention-torch25
-
-#export LD_LIBRARY_PATH=/lustre/orion/world-shared/stf218/junqi/climax/rccl-plugin-rocm6/lib/:/opt/rocm-6.2.0/lib:$LD_LIBRARY_PATH
-
-## DDStore and GPTL Timer
 module use -a /lustre/orion/world-shared/lrn036/jyc/frontier/sw/modulefiles
-module load SR_tools
+module load libfabric/1.22.0p
+
 
 
 export MIOPEN_DISABLE_CACHE=1
@@ -47,6 +42,7 @@ export PYTHONNOUSERSITE=1
 
 export OMP_NUM_THREADS=7
 export PYTHONPATH=$PWD/../src:$PYTHONPATH
+export LD_PRELOAD=/lib64/libgcc_s.so.1:/usr/lib64/libstdc++.so.6
 
 export ORBIT_USE_DDSTORE=0 ## 1 (enabled) or 0 (disable)
 

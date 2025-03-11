@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:8
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
-#SBATCH -t 01:00:00
+#SBATCH -t 00:30:00
 #SBATCH -q debug
 #SBATCH -o flash-%j.out
 #SBATCH -e flash-%j.error
@@ -21,11 +21,11 @@ module load rocm/6.2.4
 module unload darshan-runtime
 module unload libfabric
 
-source /lustre/orion/world-shared/lrn036/jyc/frontier/sw/anaconda3/2023.09/etc/profile.d/conda.sh
+source ~/miniconda3/etc/profile.d/conda.sh
 
 eval "$(/lustre/orion/world-shared/lrn036/jyc/frontier/sw/anaconda3/2023.09/bin/conda shell.bash hook)"
 
-conda activate /lustre/orion/world-shared/lrn036/jyc/frontier/sw/superres 
+conda activate /lustre/orion/lrn036/world-shared/xf9/torch26
 
 module use -a /lustre/orion/world-shared/lrn036/jyc/frontier/sw/modulefiles
 module load libfabric/1.22.0p
@@ -41,10 +41,10 @@ export PYTHONNOUSERSITE=1
 
 export OMP_NUM_THREADS=7
 export PYTHONPATH=$PWD/../src:$PYTHONPATH
+export LD_PRELOAD=/lib64/libgcc_s.so.1:/usr/lib64/libstdc++.so.6
+export ORBIT_USE_DDSTORE=1 ## 1 (enabled) or 0 (disable)
 
-export ORBIT_USE_DDSTORE=0 ## 1 (enabled) or 0 (disable)
-
-time srun -n $((SLURM_JOB_NUM_NODES*8)) --export=ALL,LD_PRELOAD=/lib64/libgcc_s.so.1:/usr/lib64/libstdc++.so.6 \
+time srun -n $((SLURM_JOB_NUM_NODES*8)) \
 python ./intermediate_downscaling.py ../configs/interm.yaml
 
 #time srun -n $((SLURM_JOB_NUM_NODES*8)) \
