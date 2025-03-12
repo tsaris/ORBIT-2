@@ -195,9 +195,9 @@ class IterDataModule(torch.nn.Module):
 
     def setup(self, stage: Optional[str] = None):
         # load datasets only if they're not loaded already
-        self.use_ddstore = int(os.environ.get("ORBIT_USE_DDSTORE", 0))
-        print("use_ddstore is :", self.use_ddstore, flush=True)
-        if self.use_ddstore:
+        use_ddstore = int(os.environ.get("ORBIT_USE_DDSTORE", 0))
+        print("use_ddstore is :", use_ddstore, flush=True)
+        if use_ddstore:
             self.data_train = IndividualDataIter(
                 self.dataset_caller(
                     NpyReader(
@@ -317,7 +317,10 @@ class IterDataModule(torch.nn.Module):
             )
 
     def train_dataloader(self):
-        if self.use_ddstore:
+        use_ddstore = int(os.environ.get("ORBIT_USE_DDSTORE", 0))
+        # print("use_ddstore is :", use_ddstore, flush=True)
+
+        if use_ddstore:
             ## assume: a GPU is mapped by the local rank
             gpu_id = int(os.getenv("SLURM_LOCALID", "0"))
             os.environ["FABRIC_IFACE"] = f"hsn{gpu_id//2}"
@@ -326,18 +329,18 @@ class IterDataModule(torch.nn.Module):
             ddp_group_size = dist.get_world_size(group=self.ddp_group)
             ddp_group_rank = dist.get_rank(group=self.ddp_group)
 
-            self.ddstore_trainset = DistDataset(
+            trainset = DistDataset(
                 self.data_train,
                 "trainset",
                 ddp_group = self.ddp_group,
                 )
 
-            sampler = torch.utils.data.distributed.DistributedSampler(self.ddstore_trainset, num_replicas=ddp_group_size, rank=ddp_group_rank, shuffle=True)
+            sampler = torch.utils.data.distributed.DistributedSampler(trainset, num_replicas=ddp_group_size, rank=ddp_group_rank, shuffle=True)
 
             ddstore_method = int(os.getenv("ORBIT_DDSTORE_METHOD", "1"))
             if ddstore_method == 0:
                 train_loader = DDStoreDataLoader(
-                    self.ddstore_trainset,
+                    trainset,
                     batch_size=self.batch_size,
                     shuffle=False,
                     drop_last=True,
@@ -347,7 +350,7 @@ class IterDataModule(torch.nn.Module):
             else:
                 ## multi-thread
                 train_loader = HydraDataLoader(
-                    self.ddstore_trainset,
+                    trainset,
                     batch_size=self.batch_size,
                     shuffle=False,
                     drop_last=True,
@@ -389,10 +392,6 @@ class IterDataModule(torch.nn.Module):
             collate_fn=self.collate_fn,
         )
 
-    def __del__(self):
-        if self.use_ddstore:
-            self.ddstore_trainset.ddstore.free()
-            del self.ddstore_trainset
 
 def collate_fn(batch):
     def handle_dict_features(t: Dict[str, torch.tensor]) -> torch.tensor:
