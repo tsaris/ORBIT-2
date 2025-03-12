@@ -32,25 +32,13 @@ model:
 # ---------------------------- DATA -------------------------------------------
 data:
   low_res_dir: {
-## (25/03/09) new variable names
-    'ERA5_1': "/lustre/orion/lrn036/world-shared/data/superres/era5/5.625_deg/",
-#    'ERA5_2': "/lustre/orion/lrn036/world-shared/data/superres/era5/1.0_deg/",
-#    'PRISM': "/lustre/orion/lrn036/world-shared/data/superres/era5-prism/10.0_arcmin",
-#    'DAYMET': "/lustre/orion/lrn036/world-shared/data/superres/era5-daymet/10.0_arcmin",
-## first dataset
-#    'ERA5_1': "/lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg/",
+    'ERA5_1': "/lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg/",
 #    'ERA5_1': "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/5.625_deg/",
 #    'ERA5_2': "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/1.0_deg/",
 #    'PRISM': "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/prism-superres/10.0_arcmin/",
   }
   high_res_dir: {
-## (25/03/09) new variable names
-    'ERA5_1': "/lustre/orion/lrn036/world-shared/data/superres/era5/1.40625_deg/",
-#    'ERA5_2': "/lustre/orion/lrn036/world-shared/data/superres/era5/0.25_deg/",
-#    'PRISM': "/lustre/orion/lrn036/world-shared/data/superres/prism/2.5_arcmin",
-#    'DAYMET': "/lustre/orion/lrn036/world-shared/data/superres/daymet/2.5_arcmin",
-## first dataset
-#    'ERA5_1': "/lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg/",
+    'ERA5_1': "/lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg/",
 #    'ERA5_1': "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/1.40625_deg/",
 #    'ERA5_2': "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/0.25_deg/",
 #    'PRISM': "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/prism-superres/2.5_arcmin/",
@@ -69,9 +57,10 @@ data:
     "land_sea_mask",
     "orography",
     "lattitude",
+    "prcp",
+    "tmin",
+    "tmax",
     "2m_temperature",
-    "2m_temperature_max",
-    "2m_temperature_min",
     "temperature_200",
     "temperature_500",
     "temperature_850",
@@ -86,8 +75,7 @@ data:
     "specific_humidity_200",
     "specific_humidity_500",
     "specific_humidity_850",
-    "total_precipitation_24hr",
-    "volumetric_soil_water_layer_1",
+    "total_precipitation",
   ]
 
 
@@ -98,8 +86,6 @@ data:
     "orography",
     "lattitude",
     "2m_temperature",
-    "2m_temperature_max",
-    "2m_temperature_min",
     "temperature_200",
     "temperature_500",
     "temperature_850",
@@ -114,16 +100,13 @@ data:
     "specific_humidity_200",
     "specific_humidity_500",
     "specific_humidity_850",
-    "total_precipitation_24hr",
-    "volumetric_soil_water_layer_1",
+    "total_precipitation",
     ],
     'ERA5_2': [
     "land_sea_mask",
     "orography",
     "lattitude",
     "2m_temperature",
-    "2m_temperature_max",
-    "2m_temperature_min",
     "temperature_200",
     "temperature_500",
     "temperature_850",
@@ -138,35 +121,34 @@ data:
     "specific_humidity_200",
     "specific_humidity_500",
     "specific_humidity_850",
-    "total_precipitation_24hr",
-    "volumetric_soil_water_layer_1",
+    "total_precipitation",
     ],
     'PRISM': [
       "land_sea_mask",
       "orography",
       "lattitude",
-      "total_precipitation_24hr",
-      "2m_temperature_min",
-      "2m_temperature_max",
+      "prcp",
+      "tmin",
+      "tmax",
     ],
   }
 
 
   dict_out_variables: {
     'ERA5_1':[
-        "total_precipitation_24hr",
+        "total_precipitation",
         "2m_temperature",
 #        "10m_u_component_of_wind",
 #        "10m_v_component_of_wind",
     ],
     'ERA5_2':[
-      "total_precipitation_24hr",
+      "total_precipitation",
       "2m_temperature",
 #      "10m_u_component_of_wind",
 #      "10m_v_component_of_wind",
     ],
-#    'PRISM': ["total_precipitation_24hr","2m_temperature_max","2m_temperature_min"],
-    'PRISM': ["total_precipitation_24hr"],
+#    'PRISM': ["prcp","tmax","tmin"],
+    'PRISM': ["prcp"],
 
   }
 
@@ -174,8 +156,8 @@ data:
     "2m_temperature": 1,
     "10m_u_component_of_wind": 0.1,
     "10m_v_component_of_wind": 0.1,
-    "total_precipitation_24hr": 0.1,
-    # "prcp": 0.1,
-    "2m_temperature_min": 1,
-    "2m_temperature_max": 1,
+    "total_precipitation": 0.1,
+    "prcp": 0.1,
+    "tmin": 1,
+    "tmax": 1,
     }

@@ -299,31 +299,6 @@ def main(device):
     epoch_start = 0
 
 
-    data_module_list = dict()
-    train_dataloader_list = dict()
-    val_dataloader_list = dict()
-    for data_key in low_res_dir.keys():
-        in_vars = dict_in_variables[data_key]
-        out_vars = dict_out_variables[data_key]
-
-        data_module = cl.data.IterDataModule(
-            "downscaling",
-            low_res_dir[data_key],
-            high_res_dir[data_key],
-            in_vars,
-            out_vars=out_vars,
-            subsample=1,
-            batch_size=batch_size,
-            buffer_size=buffer_size,
-            num_workers=num_workers,
-        ).to(device)
-        data_module.setup()
-
-        train_dataloader_list[data_key] = data_module.train_dataloader()
-        val_dataloader_list[data_key] = data_module.val_dataloader()
-        data_module_list[data_key] = data_module
-
-    
     while (epoch_start+interval_epochs) < max_epochs:
 
         for data_key in low_res_dir.keys():
@@ -346,8 +321,19 @@ def main(device):
     
     
             #load data module
-            data_module = data_module_list[data_key]
-
+            data_module = cl.data.IterDataModule(
+                "downscaling",
+                low_res_dir[data_key],
+                high_res_dir[data_key],
+                in_vars,
+                out_vars=out_vars,
+                subsample=1,
+                batch_size=batch_size,
+                buffer_size=buffer_size,
+                num_workers=num_workers,
+            ).to(device)
+            data_module.setup()
+    
             if world_rank==0:
                 print("after data_module torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
     
@@ -471,9 +457,10 @@ def main(device):
             lat, lon = data_module.get_lat_lon()
     
             # get train data loader
-            train_dataloader = train_dataloader_list[data_key]
+            train_dataloader = data_module.train_dataloader()
+    
             # get validation data loader
-            val_dataloader = val_dataloader_list[data_key]
+            val_dataloader = data_module.val_dataloader()
     
     
     
