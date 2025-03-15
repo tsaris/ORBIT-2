@@ -31,6 +31,9 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
         variable_with_units = f"{variable} ({CMIP6_VAR_TO_UNIT[variable]})"
     elif src == "PRISM":
         variable_with_units = f"{variable}"
+    elif "DAYMET" in src:
+        variable_with_units = f"{variable}"
+
     else:
         raise NotImplementedError(f"{src} is not a supported source")
 
@@ -72,6 +75,9 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
         img = np.flip(img, 0)
     elif src == "PRISM":
         img = np.flip(img, 0)
+    elif "DAYMET" in src:
+        img = np.flip(img, 0)
+
 
 
     img_min = np.min(img)
@@ -87,12 +93,14 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     # Plot the prediction
     ppred = out_transform(pred[adj_index])
 
-    print("ppred.shape",ppred.shape,flush=True)
+    print("ppred.shape",ppred.shape,"img_min",img_min,"img_max",img_max,flush=True)
   
     ppred = ppred[out_channel].detach().cpu().numpy()
     if "ERA5" in src:
         ppred = np.flip(ppred, 0)
     elif src == "PRISM":
+        ppred = np.flip(ppred, 0)
+    elif "DAYMET" in src:
         ppred = np.flip(ppred, 0)
 
     ppred_min = np.min(ppred)
@@ -114,6 +122,8 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     if "ERA5" in src:
         yy = np.flip(yy, 0)
     elif src == "PRISM":
+        yy = np.flip(yy, 0)
+    elif "DAYMET" in src:
         yy = np.flip(yy, 0)
 
 
