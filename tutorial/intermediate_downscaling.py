@@ -381,7 +381,7 @@ def main(device):
     
                     check_fn = lambda submodule: isinstance(submodule, Block)  or isinstance(submodule,Sequential)
     
-                #bfloat16 policy
+                #floating point policy
                 bfloatPolicy = MixedPrecision(
                     param_dtype=torch.bfloat16,
                     # Gradient communication precision.
@@ -562,7 +562,7 @@ def main(device):
                 del scheduler_states
     
                 #perform validation
-                if epoch%2==0:
+                if False:
                     with torch.no_grad():
                         #tell the model that we are in eval mode. Matters because we have the dropout
                         model.eval()
