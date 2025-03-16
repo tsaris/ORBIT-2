@@ -1,8 +1,8 @@
 #-----------   TRAINER -------------
 trainer:
   max_epochs: 100
-  checkpoint: 
-  pretrain: "./checkpoints/climate/intermediate_era5.ckpt" 
+  checkpoint:  
+  pretrain: "./checkpoints/climate/intermediate_8m.ckpt"
   batch_size: 32
   buffer_size: 400
   num_workers: 2
@@ -10,7 +10,7 @@ trainer:
 # ---------------------------- MODEL -------------------------------------------
 model:
   preset: res_slimvit
-  lr: 5e-4
+  lr: 2e-3
   weight_decay: 1e-5
   beta_1: 0.9
   beta_2: 0.99
@@ -34,8 +34,9 @@ data:
 ## (25/03/09) new variable names
 #    'ERA5_1': "/lustre/orion/lrn036/world-shared/data/superres/era5/5.625_deg/",
 #    'ERA5_2': "/lustre/orion/lrn036/world-shared/data/superres/era5/1.0_deg/",
-    'PRISM': "/lustre/orion/lrn036/world-shared/data/superres/prism/10.0_arcmin",
-    'DAYMET': "/lustre/orion/lrn036/world-shared/data/superres/daymet/10.0_arcmin",
+#    'PRISM': "/lustre/orion/lrn036/world-shared/data/superres/prism/10.0_arcmin",
+    'DAYMET_1': "/lustre/orion/lrn036/world-shared/data/superres/daymet/10.0_arcmin",
+#    'DAYMET_2': "/lustre/orion/lrn036/world-shared/data/superres/daymet/2.0_arcmin",
 # old datasets
 #    'ERA5_1': "/lustre/orion/lrn036/world-shared/ERA5_npz/5.625_deg/",
 #    'ERA5_1': "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/5.625_deg/",
@@ -45,9 +46,9 @@ data:
   high_res_dir: {
 #    'ERA5_1': "/lustre/orion/lrn036/world-shared/data/superres/era5/1.40625_deg/",
 #    'ERA5_2': "/lustre/orion/lrn036/world-shared/data/superres/era5/0.25_deg/",
-    'PRISM': "/lustre/orion/lrn036/world-shared/data/superres/prism/2.5_arcmin",
-    'DAYMET': "/lustre/orion/lrn036/world-shared/data/superres/daymet/2.5_arcmin",
-
+#    'PRISM': "/lustre/orion/lrn036/world-shared/data/superres/prism/2.5_arcmin",
+    'DAYMET_1': "/lustre/orion/lrn036/world-shared/data/superres/daymet/2.5_arcmin",
+#    'DAYMET_2': "/lustre/orion/lrn036/world-shared/data/superres/daymet/0.5_arcmin",
 # old datasets
 #    'ERA5_1': "/lustre/orion/lrn036/world-shared/ERA5_npz/1.40625_deg/",
 #    'ERA5_1': "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/ERA5-1hr-superres/1.40625_deg/",
@@ -60,7 +61,8 @@ data:
     'ERA5_1': 625,
     'ERA5_2': 111,
     'PRISM':  18,
-    'DAYMET':  18,
+    'DAYMET_1':  18,
+    'DAYMET_2':  4,
   }
 
   default_vars: [
@@ -149,7 +151,16 @@ data:
       "2m_temperature_min",
       "2m_temperature_max",
     ],
-    'DAYMET': [
+    'DAYMET_1': [
+      "land_sea_mask",
+      "orography",
+      "lattitude",
+      "landcover",
+      "total_precipitation_24hr",
+      "2m_temperature_min",
+      "2m_temperature_max",
+    ],
+    'DAYMET_2': [
       "land_sea_mask",
       "orography",
       "lattitude",
@@ -181,7 +192,12 @@ data:
       "2m_temperature_min",
       "2m_temperature_max",
     ],
-    'DAYMET': [
+    'DAYMET_1': [
+      "total_precipitation_24hr",
+      "2m_temperature_min",
+      "2m_temperature_max",
+    ],
+    'DAYMET_2': [
       "total_precipitation_24hr",
       "2m_temperature_min",
       "2m_temperature_max",
