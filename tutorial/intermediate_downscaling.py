@@ -380,14 +380,16 @@ def main(device):
                     )
     
                     check_fn = lambda submodule: isinstance(submodule, Block)  or isinstance(submodule,Sequential)
-    
+   
+                precision_dt = torch.bfloat16
+ 
                 #floating point policy
                 bfloatPolicy = MixedPrecision(
-                    param_dtype=torch.bfloat16,
+                    param_dtype=precision_dt,
                     # Gradient communication precision.
-                    reduce_dtype=torch.bfloat16,
+                    reduce_dtype=precision_dt,
                     # Buffer precision.
-                    buffer_dtype=torch.bfloat16,
+                    buffer_dtype=precision_dt,
                 )
     
                 #fully sharded FSDP
