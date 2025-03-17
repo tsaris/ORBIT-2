@@ -162,8 +162,7 @@ class IterDataModule(torch.nn.Module):
         normed = OrderedDict()
         for var in variables:
             if var in PRECIP_VARIABLES:
-                m2mm=hour2day=True
-                normed[var] = LogTransform(m2mm, hour2day) 
+                normed[var] = LogTransform(m2mm=True) 
             else:
                 normed[var] = transforms.Normalize(normalize_mean[var][0], normalize_std[var][0])
         return normed
