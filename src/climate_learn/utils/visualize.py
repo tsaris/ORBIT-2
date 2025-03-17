@@ -7,11 +7,30 @@ from scipy.stats import rankdata
 from tqdm import tqdm
 from ..data.processing.era5_constants import VAR_TO_UNIT as ERA5_VAR_TO_UNIT
 from ..data.processing.cmip6_constants import VAR_TO_UNIT as CMIP6_VAR_TO_UNIT
+from climate_learn.data.processing.era5_constants import (
+    CONSTANTS
+)
+
 
 def min_max_normalize(data):
     min_val = data.min()
     max_val = data.max()
     return (data - min_val) / (max_val - min_val)
+
+
+def clip_replace_constant(y, yhat, out_variables):
+
+    prcp_index = out_variables.index("total_precipitation_24hr")
+    for i in range(yhat.shape[1]):
+        if i==prcp_index:
+            torch.clamp_(yhat[:,prcp_index,:,:], min=0.0)
+
+    for i in range(yhat.shape[1]):
+        # if constant replace with ground-truth value
+        if out_variables[i] in CONSTANTS:
+            yhat[:, i] = y[:, i]
+    return yhat
+
 
 
 def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, src, device, index=0):
@@ -49,6 +68,7 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
             adj_index = index - counter
             x = x.to(device)
             pred = mm.forward(x,in_variables,out_variables)
+            pred = clip_replace_constant(y, pred, out_variables)
 
             print("x.shape",x.shape,"y.shape",y.shape,"pred.shape",pred.shape,flush=True)
 
@@ -90,11 +110,13 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     plt.show()
     plt.savefig('input.png')
 
+
+    print("img.shape",img.shape,"min",img_min,"max",img_max,flush=True)
+ 
+
     # Plot the prediction
     ppred = out_transform(pred[adj_index])
-
-    print("ppred.shape",ppred.shape,"img_min",img_min,"img_max",img_max,flush=True)
-  
+ 
     ppred = ppred[out_channel].detach().cpu().numpy()
     if "ERA5" in src:
         ppred = np.flip(ppred, 0)
@@ -112,8 +134,8 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     plt.show()
     plt.savefig('prediction.png')
 
-    print("prediction ppred.shape",ppred.shape,"extent",extent,flush=True)
-
+    print("ppred.shape",ppred.shape,"min",ppred_min,"max",ppred_max,flush=True)
+ 
 
 
     # Plot the ground truth
