@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH -A lrn036
 #SBATCH -J flash
-#SBATCH --nodes=2
+#SBATCH --nodes=8
 #SBATCH --gres=gpu:8
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
-#SBATCH -t 01:00:00
-#SBATCH -p batch
+#SBATCH -t 02:00:00
+#SBATCH -q debug
 #SBATCH -o flash-%j.out
 #SBATCH -e flash-%j.error
 
@@ -49,7 +49,12 @@ export PYTHONPATH=$PWD/../src:$PYTHONPATH
 export ORBIT_USE_DDSTORE=0 ## 1 (enabled) or 0 (disable)
 
 time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-python ./intermediate_downscaling.py ../configs/interm.yaml
+python ./intermediate_downscaling.py ../configs/interm_117m.yaml
+
+
+#time srun -n $((SLURM_JOB_NUM_NODES*8)) \
+#python ./intermediate_downscaling.py ../configs/interm_8m.yaml
+
 
 #time srun -n $((SLURM_JOB_NUM_NODES*8)) \
 #python ./intermediate_downscaling.py ../configs/era5_era5.yaml
