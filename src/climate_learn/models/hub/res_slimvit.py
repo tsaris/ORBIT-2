@@ -6,8 +6,9 @@ from .utils import register
 # Third party
 import torch
 import torch.nn as nn
-from timm.models.vision_transformer import Block, trunc_normal_
+from timm.models.vision_transformer import trunc_normal_
 from .components.attention import VariableMapping_Attention
+from .components.building_blocks import Block
 from einops import rearrange
 from functools import lru_cache
 import numpy as np
