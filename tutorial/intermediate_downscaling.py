@@ -112,6 +112,117 @@ def _load_pretrained_weights(model, pretrain_path, device):
 
 
 
+"""
+Setup sequence, data, tensor model, and sequence_plus_data parallel groups
+"""
+
+def init_par_groups(data_par_size, tensor_par_size, seq_par_size, fsdp_size, simple_ddp_size, num_heads):
+
+    world_size = torch.distributed.get_world_size()
+
+    assert seq_par_size ==1, "Sequence parallelism not implemented"
+    assert tensor_par_size ==1, "tensor parallelism not implemented"
+
+    assert (data_par_size * seq_par_size * tensor_par_size)==world_size, "DATA_PAR_SIZE * SEQ_PAR_SIZE * TENSOR_PAR_SIZE must equal to world_size"
+    assert (num_heads % tensor_par_size) ==0, "model heads % tensor parallel size must be 0"
+
+
+
+    tensor_par_group = None
+
+    for i in range(data_par_size *seq_par_size):
+        ranks = [j for j in range(i*tensor_par_size,(i+1)*tensor_par_size)]
+
+        if world_rank==0:
+            print("i ",i," data_par_size ",data_par_size," SEQ_PAR_SIZE ",seq_par_size," TENSOR_PAR_SIZE ",tensor_par_size," tensor_par_group ranks ",ranks)
+
+        group = dist.new_group(ranks)
+
+        if world_rank in ranks:
+            tensor_par_group = group
+
+
+
+
+    seq_par_group = None
+
+    for t in range(data_par_size):
+        for i in range(tensor_par_size):
+            ranks = [t*tensor_par_size*seq_par_size+i+j*tensor_par_size for j in range(seq_par_size)]
+
+            if world_rank==0:
+                print("i ",i," data_par_size ",data_par_size," SEQ_PAR_SIZE ",seq_par_size, " TENSOR_PAR_SIZE ",tensor_par_size," seq_par_group ranks ",ranks,flush=True)
+
+            group = dist.new_group(ranks)
+
+            if world_rank in ranks:
+
+                seq_par_group = group
+
+
+
+
+    ddp_group = None
+
+    fsdp_group = None
+
+    simple_ddp_group = None
+
+    for i in range(tensor_par_size *seq_par_size):
+        ranks = [i+j*tensor_par_size *seq_par_size for j in range(data_par_size)]
+
+        for k in range(simple_ddp_size):
+            fsdp_begin_idx = k*fsdp_size
+            fsdp_end_idx = (k+1)*fsdp_size
+            fsdp_ranks = ranks[fsdp_begin_idx:fsdp_end_idx]
+
+ 
+            if world_rank==0:
+                print("i ",i," data_par_size ",data_par_size," SEQ_PAR_SIZE ",seq_par_size," TENSOR_PAR_SIZE ",tensor_par_size," fsdp_ranks",fsdp_ranks)
+
+
+            group = dist.new_group(fsdp_ranks)
+            if world_rank in fsdp_ranks:
+                fsdp_group = group
+
+
+        for k in range(fsdp_size):
+            simple_ddp_begin_idx = k
+            simple_ddp_end_idx = len(ranks)
+            simple_ddp_ranks = ranks[simple_ddp_begin_idx:simple_ddp_end_idx:fsdp_size]
+
+ 
+            if world_rank==0:
+                print("i ",i," data_par_size ",data_par_size," SEQ_PAR_SIZE ",seq_par_size," TENSOR_PAR_SIZE ",tensor_par_size," simple_ddp_ranks",simple_ddp_ranks)
+
+            group = dist.new_group(simple_ddp_ranks)
+            if world_rank in simple_ddp_ranks:
+                simple_ddp_group = group
+ 
+        if world_rank==0:
+            print("i ",i," data_par_size ",data_par_size," SEQ_PAR_SIZE ",seq_par_size," TENSOR_PAR_SIZE ",tensor_par_size," ddp_group ranks ",ranks)
+        group = dist.new_group(ranks)
+        if world_rank in ranks:
+            ddp_group = group
+
+
+    data_seq_ort_group = None
+
+    for i in range(tensor_par_size):
+        ranks = [i+tensor_par_size*j for j in range(data_par_size * seq_par_size)]
+
+        if world_rank==0:
+            print("i ",i," data_par_size ",data_par_size," SEQ_PAR_SIZE ",seq_par_size," TENSOR_PAR_SIZE ",tensor_par_size," data_seq_ort_group ranks ",ranks)
+        group = dist.new_group(ranks)
+
+        if world_rank in ranks:
+            data_seq_ort_group = group
+
+    return seq_par_group, ddp_group, tensor_par_group, data_seq_ort_group, fsdp_group, simple_ddp_group
+
+
+
+
 def clip_replace_constant(y, yhat, out_variables):
 
     prcp_index = out_variables.index("total_precipitation_24hr")
@@ -252,6 +363,8 @@ def main(device):
     fsdp_size = conf['parallelism']['fsdp'] 
     simple_ddp_size = conf['parallelism']['simple_ddp']
     tensor_par_size = conf['parallelism']['tensor_par']
+    seq_par_size = conf['parallelism']['seq_par']
+
 
 
     low_res_dir = conf['data']['low_res_dir']
@@ -287,11 +400,11 @@ def main(device):
 
     if world_rank==0:
         print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir,"spatial_resolution",spatial_resolution,"default_vars",default_vars,"preset",preset,"lr",lr,"beta_1",beta_1,"beta_2",beta_2,"weight_decay",weight_decay,"warmup_epochs",warmup_epochs,"warmup_start_lr",warmup_start_lr,"eta_min",eta_min,"superres_mag",superres_mag,"cnn_ratio",cnn_ratio,"patch_size",patch_size,"embed_dim",embed_dim,"depth",depth,"decoder_depth",decoder_depth,"num_heads",num_heads,"mlp_ratio",mlp_ratio,"drop_path",drop_path,"drop_rate",drop_rate,"batch_size",batch_size,"num_workers",num_workers,"buffer_size",buffer_size,"data_type",data_type,"train_loss_str",train_loss_str,flush=True)
-        print("data_par_size",data_par_size,"fsdp_size",fsdp_size,"simple_ddp_size",simple_ddp_size,"tensor_par_size",tensor_par_size,flush=True)
+        print("data_par_size",data_par_size,"fsdp_size",fsdp_size,"simple_ddp_size",simple_ddp_size,"tensor_par_size",tensor_par_size,"seq_par_size",seq_par_size,flush=True)
 
 
-    if tensor_par_size>1:
-        raise NotImplementedError(f"tensor parallelism not implemented")
+    #initialize parallelism groups
+    seq_par_group, ddp_group, tensor_par_group, data_seq_ort_group, fsdp_group, simple_ddp_group = init_par_groups(data_par_size = data_par_size, tensor_par_size = tensor_par_size, seq_par_size = seq_par_size, fsdp_size = fsdp_size, simple_ddp_size = simple_ddp_size, num_heads= num_heads)
 
 
 
@@ -419,30 +532,30 @@ def main(device):
                     # Buffer precision.
                     buffer_dtype=precision_dt,
                 )
-    
+
+                #hybrid sharded FSDP
+                if fsdp_size >1 and simple_ddp_size >1:
+            
+                    print("enter hybird FSDP",flush=True)
+                    model = FSDP(model, device_id = local_rank, process_group= (fsdp_group,simple_ddp_group),sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.HYBRID_SHARD,auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False) 
                 #fully sharded FSDP
-                model = FSDP(model, device_id = local_rank, process_group= None,sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.FULL_SHARD,auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False)
-    
-    
+                elif fsdp_size >1 and simple_ddp_size==1:
+                    print("enter fully sharded FSDP",flush=True)
+                    model = FSDP(model, device_id = local_rank, process_group= fsdp_group,sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.FULL_SHARD,auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False)
+                else:
+                #no shard only
+                    print("enter NO SHARD only,",flush=True)
+                    model = FSDP(model, device_id = local_rank, process_group= simple_ddp_group,sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.NO_SHARD,auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False)   
     
     
     
             #update spatial resolution, image size, and # variables to model based on datasets
             in_shape, _ = data_module.get_data_dims()
             _, in_height, in_width = in_shape[1:]
-    
+   
             with FSDP.summon_full_params(model):
-                model.data_config(spatial_resolution[data_key],(in_height, in_width),len(in_vars),len(out_vars)) 
-            
-    
-    
-    
-            with FSDP.summon_full_params(model):
-                if torch.distributed.get_rank()==0:
-                    print("outside data_config spatial resol is ",model.module.spatial_resolution,"img_size",model.module.img_size,"in_channels",model.module.in_channels,"out_channels",model.module.out_channels,"num_patches",model.module.num_patches,flush=True)
-    
-    
-    
+                model.data_config(spatial_resolution[data_key],(in_height, in_width),len(in_vars),len(out_vars))  
+
     
             if first_time_bool:
                 #activation checkpointing
