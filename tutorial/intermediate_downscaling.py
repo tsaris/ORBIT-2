@@ -246,9 +246,14 @@ def main(device):
     num_workers = conf['trainer']['num_workers']
     buffer_size = conf['trainer']['buffer_size']
     data_type = conf['trainer']['data_type']
-    train_loss_str = conf['trainer']['train_loss']
-  
+    train_loss_str = conf['trainer']['train_loss'] 
     pretrain_path = conf['trainer']['pretrain']
+
+    fsdp_size = conf['parallelism']['fsdp'] 
+    simple_ddp_size = conf['parallelism']['simple_ddp']
+    tensor_par_size = conf['parallelism']['tensor_par']
+
+
     low_res_dir = conf['data']['low_res_dir']
     high_res_dir = conf['data']['high_res_dir']
     preset = conf['model']['preset']
@@ -277,8 +282,17 @@ def main(device):
     drop_path = conf['model']['drop_path']
     drop_rate = conf['model']['drop_rate']
 
+
+    data_par_size = fsdp_size * simple_ddp_size
+
     if world_rank==0:
         print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir,"spatial_resolution",spatial_resolution,"default_vars",default_vars,"preset",preset,"lr",lr,"beta_1",beta_1,"beta_2",beta_2,"weight_decay",weight_decay,"warmup_epochs",warmup_epochs,"warmup_start_lr",warmup_start_lr,"eta_min",eta_min,"superres_mag",superres_mag,"cnn_ratio",cnn_ratio,"patch_size",patch_size,"embed_dim",embed_dim,"depth",depth,"decoder_depth",decoder_depth,"num_heads",num_heads,"mlp_ratio",mlp_ratio,"drop_path",drop_path,"drop_rate",drop_rate,"batch_size",batch_size,"num_workers",num_workers,"buffer_size",buffer_size,"data_type",data_type,"train_loss_str",train_loss_str,flush=True)
+        print("data_par_size",data_par_size,"fsdp_size",fsdp_size,"simple_ddp_size",simple_ddp_size,"tensor_par_size",tensor_par_size,flush=True)
+
+
+    if tensor_par_size>1:
+        raise NotImplementedError(f"tensor parallelism not implemented")
+
 
 
     model_kwargs = {'default_vars':default_vars,'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate}
