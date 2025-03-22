@@ -1,16 +1,15 @@
-#in_variables.index("orography" Local application
 from .components.cnn_blocks import PeriodicConv2D
 from .components.pos_embed import get_2d_sincos_pos_embed
 from .utils import register
-
-# Third party
 import torch
 import torch.nn as nn
+from functools import lru_cache
+import numpy as np
+
+# Third party
 from timm.models.vision_transformer import Block, trunc_normal_
 from .components.attention import VariableMapping_Attention
 from einops import rearrange
-from functools import lru_cache
-import numpy as np
 from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed_on_the_fly
 from climate_learn.models.hub.components.patch_embed import PatchEmbed 
 
