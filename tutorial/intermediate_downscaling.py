@@ -91,7 +91,7 @@ def load_checkpoint_pretrain(model, checkpoint_path, pretrain_path, cp_save_path
 
             del init_model_dict
 
-        dist.barrier( device_ids= local_rank)
+        dist.barrier(device_ids= [local_rank])
 
         if world_rank!=0 and world_rank <tensor_par_size:
 
@@ -676,8 +676,8 @@ def main(device):
     
                     epoch_loss += loss.detach()
         
-                    if world_rank==0:
-                        print("epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," loss ",loss,flush=True)
+                    #if world_rank==0:
+                    print("epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," loss ",loss,flush=True)
         
                     optimizer.zero_grad()
                     #timer.begin("backward")
@@ -688,8 +688,8 @@ def main(device):
                     #timer.end("optimizer_step")
     
         
-                    if world_rank==0:
-                        print("rank",world_rank,"batch_idx",batch_idx,"get_lr ",scheduler.get_lr(),"after optimizer step torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
+                    #if world_rank==0:
+                    print("rank",world_rank,"batch_idx",batch_idx,"get_lr ",scheduler.get_lr(),"after optimizer step torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
     
     
                     if world_rank==0:
@@ -732,7 +732,7 @@ def main(device):
              
                 print("rank",world_rank,"After torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
         
-                dist.barrier()
+                dist.barrier(device_ids= [local_rank])
                 del model_states
                 del optimizer_states
                 del scheduler_states
