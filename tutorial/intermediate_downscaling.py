@@ -41,40 +41,73 @@ from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed
 from climate_learn.dist.profile import *
 
 
-def load_checkpoint_pretrain(model, checkpoint_path, pretrain_path):
+def load_checkpoint_pretrain(model, checkpoint_path, pretrain_path, cp_save_path, tensor_par_size=1,tensor_par_group=None):
+    world_rank = dist.get_rank()
+    local_rank = int(os.environ['SLURM_LOCALID'])
+
     #load model checkpoint
-    if checkpoint_path is not None:
-        if os.path.exists(checkpoint_path):
-            print("model resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
+    if checkpoint_path is not None and world_rank < tensor_par_size:
+        if os.path.exists(checkpoint_path+"_"+"rank"+"_"+str(world_rank)):
+
+            print("world_rank",world_rank,"model resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
 
             #map_location = 'cuda:'+str(device)
             map_location = 'cpu'
 
-            checkpoint = torch.load(checkpoint_path,map_location=map_location)
+            checkpoint = torch.load(checkpoint_path+"_"+"rank"+"_"+str(world_rank),map_location=map_location)
             model.load_state_dict(checkpoint['model_state_dict'])
 
             del checkpoint
         else:
             print("resume from checkpoint was set to True. But the checkpoint path does not exist.",flush=True)
-
             sys.exit("checkpoint path does not exist")
 
     #load pretrained model
-    if pretrain_path is not None:
-        if os.path.exists(pretrain_path):
-            print("load pretrained model",pretrain_path," Pretrain path found.",flush=True)
-            _load_pretrained_weights(model,pretrain_path,device)  
+    if pretrain_path is not None and world_rank < tensor_par_size:
+        if os.path.exists(pretrain_path+"_"+"rank"+"_"+str(world_rank)):
+            print("world_rank",world_rank,"load pretrained model",pretrain_path," Pretrain path found.",flush=True)
+            _load_pretrained_weights(model,pretrain_path,device,world_rank)  
         else:
             print("resume from pretrained model was set to True. But the pretrained model path does not exist.",flush=True)
-
             sys.exit("pretrain path does not exist")
 
+    #initialize weights for tensor parallelism when training from scratch
+    if pretrain_path is None and checkpoint_path is None and tensor_par_size > 1:
+        if world_rank==0: 
+            isExist = os.path.exists(cp_save_path)
+      
+            if not isExist:
+                # Create a new directory because it does not exist
+                os.makedirs(cp_save_path)
+                print("The new checkpoint saving directory is created!")    
+
+            #save initialial model weights and distribute to all GPUs in the tensor parallel group to synchronize model weights that do not belong to the training block
+            init_model_dict = {k: v for k, v in model.state_dict().items() if ('attn' not in  k and 'mlp' not in k and 'var_agg' not in k)}
+
+            print("training from scratch and tensor_par_size>1. rank",world_rank,"init_model_dict.keys()",init_model_dict.keys(),flush=True)
+
+            torch.save(init_model_dict,
+                    cp_save_path+'/initial_'+str(dist.get_rank())+'.pth')
+
+            del init_model_dict
+
+        dist.barrier( device_ids= local_rank)
+
+        if world_rank!=0 and world_rank <tensor_par_size:
+
+           #load initial model weights and synchronize model weights that are not in the trianing block among sequence parallel GPUs
+           print("training from scratch. rank",world_rank,flush=True)
+
+           map_location = 'cpu'
+           #map_location = 'cuda:'+str(device)
+           model.load_state_dict(torch.load(cp_save_path+'/initial_'+str(0)+'.pth',map_location=map_location),strict=False)
 
 
-def _load_pretrained_weights(model, pretrain_path, device):
+
+def _load_pretrained_weights(model, pretrain_path, device,world_rank):
     # map_location = 'cuda:'+str(device)
     map_location = 'cpu'
-    checkpoint = torch.load(pretrain_path, map_location=map_location)
+    checkpoint = torch.load(pretrain_path+"_"+"rank"+"_"+str(world_rank), map_location=map_location)
 
     print("Loading pre-trained checkpoint from: %s" % pretrain_path)
     pretrain_model = checkpoint["model_state_dict"]
@@ -121,7 +154,6 @@ def init_par_groups(data_par_size, tensor_par_size, seq_par_size, fsdp_size, sim
     world_size = torch.distributed.get_world_size()
 
     assert seq_par_size ==1, "Sequence parallelism not implemented"
-    assert tensor_par_size ==1, "tensor parallelism not implemented"
 
     assert (data_par_size * seq_par_size * tensor_par_size)==world_size, "DATA_PAR_SIZE * SEQ_PAR_SIZE * TENSOR_PAR_SIZE must equal to world_size"
     assert (num_heads % tensor_par_size) ==0, "model heads % tensor parallel size must be 0"
@@ -433,6 +465,8 @@ def main(device):
 
     epoch_start = 0
 
+    cp_save_path = "checkpoints/climate" 
+
 
     while (epoch_start+interval_epochs) < max_epochs:
 
@@ -490,7 +524,7 @@ def main(device):
                         print(name, param.data.shape)
     
                 # load from checkpoint for continued training , or from pretrained model weights
-                load_checkpoint_pretrain(model, checkpoint_path, pretrain_path)
+                load_checkpoint_pretrain(model, checkpoint_path, pretrain_path,cp_save_path,tensor_par_size=tensor_par_size,tensor_par_group=tensor_par_group)
     
     
     
@@ -536,7 +570,7 @@ def main(device):
                 #hybrid sharded FSDP
                 if fsdp_size >1 and simple_ddp_size >1:
             
-                    print("enter hybird FSDP",flush=True)
+                    print("enter hybrid FSDP",flush=True)
                     model = FSDP(model, device_id = local_rank, process_group= (fsdp_group,simple_ddp_group),sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.HYBRID_SHARD,auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False) 
                 #fully sharded FSDP
                 elif fsdp_size >1 and simple_ddp_size==1:
@@ -586,11 +620,11 @@ def main(device):
                 if checkpoint_path is not None:
     
                     print("optimizer resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
-    
+                    src_rank = world_rank - tensor_par_size * dist.get_rank(group=data_seq_ort_group) 
                     #map_location = 'cuda:'+str(device)
                     map_location = 'cpu'
     
-                    checkpoint = torch.load(checkpoint_path,map_location=map_location)
+                    checkpoint = torch.load(checkpoint_path+"_"+"rank"+"_"+str(src_rank),map_location=map_location)
                     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
                     scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
                     epoch_start = checkpoint['epoch']+1
@@ -672,13 +706,12 @@ def main(device):
     
    
                 if world_rank ==0:    
-                    checkpoint_path = "checkpoints/climate" 
                     # Check whether the specified checkpointing path exists or not
-                    isExist = os.path.exists(checkpoint_path)
+                    isExist = os.path.exists(cp_save_path)
                     if not isExist:
                         # Create a new directory because it does not exist
-                        os.makedirs(checkpoint_path)
-                        print("The new checkpoint directory is created!")        
+                        os.makedirs(cp_save_path)
+                        print("The new checkpoint save directory is created!")        
         
         
                 print("rank",world_rank,"Before torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
@@ -688,14 +721,14 @@ def main(device):
                 optimizer_states = optimizer.state_dict()
                 scheduler_states = scheduler.state_dict()
         
-                if world_rank == 0 :
+                if world_rank < tensor_par_size:
              
                     torch.save({
                         'epoch': epoch,
                         'model_state_dict': model_states,
                         'optimizer_state_dict': optimizer_states,
                         'scheduler_state_dict': scheduler_states,
-                        }, checkpoint_path+"/"+"interm"+"_rank_"+str(world_rank)+"_epoch_"+ str(epoch) +".ckpt")
+                        }, cp_save_path+"/"+"interm"+"_epoch_"+ str(epoch) +".ckpt"+"_"+"rank"+"_"+str(world_rank))
              
                 print("rank",world_rank,"After torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
         
