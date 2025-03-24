@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Type
+from climate_learn.utils.dist_functions import F_Identity_B_AllReduce, F_Identity_B_AllReduce_VariableMapping
+
 
 class VariableMapping_Attention(nn.Module):
     def __init__(
@@ -15,6 +17,8 @@ class VariableMapping_Attention(nn.Module):
             attn_drop: float = 0.,
             proj_drop: float = 0.,
             norm_layer: Type[nn.Module] = nn.LayerNorm,
+            tensor_par_size: int = 1, 
+            tensor_par_group = None,
     ) -> None:
         super().__init__()
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
@@ -22,28 +26,34 @@ class VariableMapping_Attention(nn.Module):
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
         self.fused_attn = fused_attn
+        self.tensor_par_size = tensor_par_size
+        self.tensor_par_group = tensor_par_group
 
 
-        self.q = nn.Linear(dim, dim, bias=qkv_bias)
+        self.q = nn.Linear(dim, dim//tensor_par_size, bias=qkv_bias)
    
-        self.kv = nn.Linear(dim, dim * 2, bias=qkv_bias)
+        self.kv = nn.Linear(dim, dim * 2 //tensor_par_size, bias=qkv_bias)
 
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim, bias=proj_bias)
+        self.proj = nn.Linear(dim // tensor_par_size, dim, bias=proj_bias)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, var_query: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
 
+        if self.tensor_par_size >1:
+            var_query= F_Identity_B_AllReduce_VariableMapping(var_query, group=self.tensor_par_group)
+            x= F_Identity_B_AllReduce_VariableMapping(x, group=self.tensor_par_group)
+
         N_a = var_query.size(dim=1) #number of aggregated variables
         B, N_i, C = x.shape #B batch times sequence length, #N_i number of input variables, C embedding size 
 
-        q = self.q(var_query).reshape(B, N_a, self.num_heads, self.head_dim ).permute(0, 2, 1, 3)
+        q = self.q(var_query).reshape(B, N_a, self.num_heads // self.tensor_par_size, self.head_dim ).permute(0, 2, 1, 3)
 
         #print("var_query.shape",var_query.shape,"self.q",self.q,"q.shape",q.shape,flush=True)
        
-        kv = self.kv(x).reshape(B, N_i, 2, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        kv = self.kv(x).reshape(B, N_i, 2, self.num_heads // self.tensor_par_size, self.head_dim).permute(2, 0, 3, 1, 4)
 
         k, v = kv.unbind(0)
         q, k = self.q_norm(q), self.k_norm(k)
@@ -60,7 +70,11 @@ class VariableMapping_Attention(nn.Module):
             attn = self.attn_drop(attn)
             x = attn @ v
 
-        x = x.transpose(1, 2).reshape(B, N_a, C)
+        x = x.transpose(1, 2).reshape(B, N_a, C// self.tensor_par_size)
         x = self.proj(x)
         x = self.proj_drop(x)
+
+        if self.tensor_par_size >1:
+            x= F_Identity_B_AllReduce_VariableMapping(x, group=self.tensor_par_group)
+
         return x

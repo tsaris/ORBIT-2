@@ -5,13 +5,15 @@ import torch
 import torch.nn as nn
 from functools import lru_cache
 import numpy as np
-
+import torch.distributed as dist
 # Third party
 from timm.models.vision_transformer import Block, trunc_normal_
 from .components.attention import VariableMapping_Attention
 from einops import rearrange
 from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed_on_the_fly
 from climate_learn.models.hub.components.patch_embed import PatchEmbed 
+from climate_learn.utils.dist_functions import F_Identity_B_Broadcast
+
 
 @register("res_slimvit")
 class Res_Slim_ViT(nn.Module):
@@ -33,6 +35,8 @@ class Res_Slim_ViT(nn.Module):
         decoder_depth=8,
         num_heads=16,
         mlp_ratio=4.0,
+        tensor_par_size = 1,
+        tensor_par_group = None,
     ):
         super().__init__()
         self.default_vars = default_vars
@@ -48,6 +52,10 @@ class Res_Slim_ViT(nn.Module):
         self.history = history
         self.embed_dim = embed_dim
         self.spatial_resolution = 0
+        self.tensor_par_size = tensor_par_size
+        self.tensor_par_group = tensor_par_group
+
+
         self.spatial_embed = nn.Linear(1, embed_dim)
         
         self.token_embeds = nn.ModuleList(
@@ -64,7 +72,7 @@ class Res_Slim_ViT(nn.Module):
         self.var_query = nn.Parameter(torch.zeros(1, 1, embed_dim), requires_grad=True)
 
         #self.var_agg = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
-        self.var_agg = VariableMapping_Attention(embed_dim, fused_attn=False, num_heads=num_heads, qkv_bias=False)
+        self.var_agg = VariableMapping_Attention(embed_dim, fused_attn=False, num_heads=num_heads, qkv_bias=False,tensor_par_size = tensor_par_size, tensor_par_group = tensor_par_group)
         
         self.pos_embed = nn.Parameter(
             torch.zeros(1, self.num_patches, embed_dim), requires_grad=learn_pos_emb
@@ -200,14 +208,15 @@ class Res_Slim_ViT(nn.Module):
 
         var_query = self.var_query.expand(x.shape[0], -1, -1).contiguous()
 
-        #src_rank = dist.get_rank() - dist.get_rank(group=self.tensor_par_group)
-
         #x , _ = self.var_agg(var_query, x, x)
         x = self.var_agg(var_query, x)  # BxL, V~ , D, where V~ is the aggregated variables
 
         x = x.squeeze()
 
-#        x= F_Identity_B_Broadcast(x, src_rank, group=self.tensor_par_group)  #must do the backward broadcast because of the randomneess of dropout
+        if self.tensor_par_size >1:
+
+            src_rank = dist.get_rank() - dist.get_rank(group=self.tensor_par_group)
+            x= F_Identity_B_Broadcast(x, src_rank, group=self.tensor_par_group)  #must do the backward broadcast because of the randomneess of dropout
 
         x = x.unflatten(dim=0, sizes=(b, l))  # B, L, V~, D
 
