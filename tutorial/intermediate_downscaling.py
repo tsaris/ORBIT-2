@@ -82,7 +82,10 @@ def load_checkpoint_pretrain(model, checkpoint_path, pretrain_path, cp_save_path
                 print("The new checkpoint saving directory is created!")    
 
             #save initialial model weights and distribute to all GPUs in the tensor parallel group to synchronize model weights that do not belong to the training block
-            init_model_dict = {k: v for k, v in model.state_dict().items() if ('attn' not in  k and 'mlp' not in k and 'var_agg' not in k)}
+            init_model_dict = {k: v for k, v in model.state_dict().items() if ('var_agg' not in k)}
+
+            #init_model_dict = {k: v for k, v in model.state_dict().items() if ('attn' not in  k and 'mlp' not in k and 'var_agg' not in k)}
+            #init_model_dict = {k: v for k, v in model.state_dict().items() }
 
             print("training from scratch and tensor_par_size>1. rank",world_rank,"init_model_dict.keys()",init_model_dict.keys(),flush=True)
 
@@ -194,7 +197,7 @@ def init_par_groups(data_par_size, tensor_par_size, seq_par_size, fsdp_size, sim
 
 
 
-    ddp_group = None
+    data_par_group = None
 
     fsdp_group = None
 
@@ -232,10 +235,10 @@ def init_par_groups(data_par_size, tensor_par_size, seq_par_size, fsdp_size, sim
                 simple_ddp_group = group
  
         if world_rank==0:
-            print("i ",i," data_par_size ",data_par_size," SEQ_PAR_SIZE ",seq_par_size," TENSOR_PAR_SIZE ",tensor_par_size," ddp_group ranks ",ranks)
+            print("i ",i," data_par_size ",data_par_size," SEQ_PAR_SIZE ",seq_par_size," TENSOR_PAR_SIZE ",tensor_par_size," data_par_group ranks ",ranks)
         group = dist.new_group(ranks)
         if world_rank in ranks:
-            ddp_group = group
+            data_par_group = group
 
 
     data_seq_ort_group = None
@@ -250,7 +253,7 @@ def init_par_groups(data_par_size, tensor_par_size, seq_par_size, fsdp_size, sim
         if world_rank in ranks:
             data_seq_ort_group = group
 
-    return seq_par_group, ddp_group, tensor_par_group, data_seq_ort_group, fsdp_group, simple_ddp_group
+    return seq_par_group, data_par_group, tensor_par_group, data_seq_ort_group, fsdp_group, simple_ddp_group
 
 
 
@@ -436,11 +439,11 @@ def main(device):
 
 
     #initialize parallelism groups
-    seq_par_group, ddp_group, tensor_par_group, data_seq_ort_group, fsdp_group, simple_ddp_group = init_par_groups(data_par_size = data_par_size, tensor_par_size = tensor_par_size, seq_par_size = seq_par_size, fsdp_size = fsdp_size, simple_ddp_size = simple_ddp_size, num_heads= num_heads)
+    seq_par_group, data_par_group, tensor_par_group, data_seq_ort_group, fsdp_group, simple_ddp_group = init_par_groups(data_par_size = data_par_size, tensor_par_size = tensor_par_size, seq_par_size = seq_par_size, fsdp_size = fsdp_size, simple_ddp_size = simple_ddp_size, num_heads= num_heads)
 
 
 
-    model_kwargs = {'default_vars':default_vars,'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate}
+    model_kwargs = {'default_vars':default_vars,'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate, 'tensor_par_size':tensor_par_size, 'tensor_par_group':tensor_par_group}
 
 
     if world_rank==0:
@@ -496,11 +499,14 @@ def main(device):
                 high_res_dir[data_key],
                 in_vars,
                 out_vars=out_vars,
+                data_par_size = data_par_size,
+                data_par_group = data_par_group,
                 subsample=1,
                 batch_size=batch_size,
                 buffer_size=buffer_size,
                 num_workers=num_workers,
             ).to(device)
+
             data_module.setup()
     
             if world_rank==0:
@@ -686,7 +692,16 @@ def main(device):
                     #timer.begin("optimizer_step")
                     optimizer.step()
                     #timer.end("optimizer_step")
-    
+   
+                    #with torch.no_grad(): 
+                    #    with FSDP.summon_full_params(model):
+                    #        print("rank",world_rank,"var_query",model.var_query.weight[0,0,0],"pos_embed",model.pos_embed.weight[0,0,0],flush=True)
+
+
+
+
+
+
         
                     #if world_rank==0:
                     print("rank",world_rank,"batch_idx",batch_idx,"get_lr ",scheduler.get_lr(),"after optimizer step torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
