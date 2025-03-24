@@ -25,6 +25,8 @@ class NpyReader(IterableDataset):
         out_file_list,
         variables,
         out_variables,
+        data_par_size: int =1,
+        data_par_group = None,
         shuffle=False,
     ):
         super().__init__()
@@ -34,6 +36,9 @@ class NpyReader(IterableDataset):
         self.variables = variables
         self.out_variables = out_variables if out_variables is not None else variables
         self.shuffle = shuffle
+        self.data_par_size = data_par_size
+        self.data_par_group = data_par_group
+
 
     def __iter__(self):
         if self.shuffle:
@@ -44,10 +49,11 @@ class NpyReader(IterableDataset):
         n_files = len(self.inp_file_list)
 
         ## Wrap-around filelist if files < processes.
-        world_size = torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
+        data_par_size = self.data_par_size if torch.distributed.is_initialized() else 1
         worker_info = torch.utils.data.get_worker_info()
         num_workers_per_ddp = worker_info.num_workers if worker_info is not None else 1
-        total_num_workers = num_workers_per_ddp * world_size
+        total_num_workers = num_workers_per_ddp * self.data_par_size
+
 
         if n_files < total_num_workers:
             n_multiply = total_num_workers // n_files
@@ -58,10 +64,9 @@ class NpyReader(IterableDataset):
 
         worker_info = torch.utils.data.get_worker_info()
         if worker_info is None:
-            rank = torch.distributed.get_rank()
-            world_size = torch.distributed.get_world_size()
+            rank = torch.distributed.get_rank(group = self.data_par_group)
             num_workers_per_ddp = 1
-            num_shards = num_workers_per_ddp * world_size
+            num_shards = num_workers_per_ddp * data_par_size
             per_worker = n_files // num_shards
             worker_id = rank * num_workers_per_ddp
             iter_start = worker_id * per_worker
@@ -69,21 +74,21 @@ class NpyReader(IterableDataset):
         else:
             if not torch.distributed.is_initialized():
                 rank = 0
-                world_size = 1
+                data_par_size = 1
             else:
-                rank = torch.distributed.get_rank()
-                world_size = torch.distributed.get_world_size()
+                rank = torch.distributed.get_rank(group = self.data_par_group)
             num_workers_per_ddp = worker_info.num_workers
-            num_shards = num_workers_per_ddp * world_size
+            num_shards = num_workers_per_ddp * data_par_size
             per_worker = n_files // num_shards
             worker_id = rank * num_workers_per_ddp + worker_info.id
             iter_start = worker_id * per_worker
             iter_end = iter_start + per_worker
 
+
         for idx in range(iter_start, iter_end):
             path_inp = self.inp_file_list[idx]
             path_out = self.out_file_list[idx]
-            print(torch.distributed.get_rank(), "NpyReader:", path_inp)
+            print("world_rank",torch.distributed.get_rank(),"data_par_group rank",rank, "NpyReader:", path_inp)
             inp = np.load(path_inp)
             if path_out == path_inp:
                 out = inp
