@@ -7,11 +7,12 @@ from functools import lru_cache
 import numpy as np
 import torch.distributed as dist
 # Third party
-from timm.models.vision_transformer import Block, trunc_normal_
+from timm.models.vision_transformer import trunc_normal_
 from .components.attention import VariableMapping_Attention
 from einops import rearrange
-from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed_on_the_fly
-from climate_learn.models.hub.components.patch_embed import PatchEmbed 
+from .components.pos_embed import interpolate_pos_embed_on_the_fly
+from .components.patch_embed import PatchEmbed 
+from .components.vit_blocks import Block
 from climate_learn.utils.dist_functions import F_Identity_B_Broadcast, Grad_Inspect
 
 
@@ -72,7 +73,7 @@ class Res_Slim_ViT(nn.Module):
         self.var_query = nn.Parameter(torch.zeros(1, 1, embed_dim), requires_grad=True)
 
         #self.var_agg = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
-        self.var_agg = VariableMapping_Attention(embed_dim, fused_attn=False, num_heads=num_heads, qkv_bias=False,tensor_par_size = tensor_par_size, tensor_par_group = tensor_par_group)
+        self.var_agg = VariableMapping_Attention(embed_dim, fused_attn=True, num_heads=num_heads, qkv_bias=False,tensor_par_size = tensor_par_size, tensor_par_group = tensor_par_group)
         
         self.pos_embed = nn.Parameter(
             torch.zeros(1, self.num_patches, embed_dim), requires_grad=learn_pos_emb
@@ -83,8 +84,9 @@ class Res_Slim_ViT(nn.Module):
             [
                 Block(
                     embed_dim,
-                    num_heads,
-                    mlp_ratio,
+                    num_heads =num_heads, 
+                    fused_attn=True,
+                    mlp_ratio = mlp_ratio,
                     qkv_bias=True,
                     drop_path=dpr[i],
                     norm_layer=nn.LayerNorm,
