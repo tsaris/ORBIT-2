@@ -82,10 +82,8 @@ def load_checkpoint_pretrain(model, checkpoint_path, pretrain_path, cp_save_path
                 print("The new checkpoint saving directory is created!")    
 
             #save initialial model weights and distribute to all GPUs in the tensor parallel group to synchronize model weights that do not belong to the training block
-            init_model_dict = {k: v for k, v in model.state_dict().items() if ('var_agg' not in k)}
 
-            #init_model_dict = {k: v for k, v in model.state_dict().items() if ('attn' not in  k and 'mlp' not in k and 'var_agg' not in k)}
-            #init_model_dict = {k: v for k, v in model.state_dict().items() }
+            init_model_dict = {k: v for k, v in model.state_dict().items() if ('attn' not in  k and 'mlp' not in k and 'var_agg' not in k)}
 
             print("training from scratch and tensor_par_size>1. rank",world_rank,"init_model_dict.keys()",init_model_dict.keys(),flush=True)
 
@@ -682,8 +680,8 @@ def main(device):
     
                     epoch_loss += loss.detach()
         
-                    #if world_rank==0:
-                    print("epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," loss ",loss,flush=True)
+                    if world_rank==0 or world_rank==1:
+                        print("epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," loss ",loss,flush=True)
         
                     optimizer.zero_grad()
                     #timer.begin("backward")
@@ -693,16 +691,7 @@ def main(device):
                     optimizer.step()
                     #timer.end("optimizer_step")
    
-                    #with torch.no_grad(): 
-                    #    with FSDP.summon_full_params(model):
-                    #        print("rank",world_rank,"var_query",model.var_query.weight[0,0,0],"pos_embed",model.pos_embed.weight[0,0,0],flush=True)
-
-
-
-
-
-
-        
+                    
                     #if world_rank==0:
                     print("rank",world_rank,"batch_idx",batch_idx,"get_lr ",scheduler.get_lr(),"after optimizer step torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
     
