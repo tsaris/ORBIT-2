@@ -38,6 +38,8 @@ class Block(nn.Module):
             act_layer: Type[nn.Module] = nn.GELU,
             norm_layer: Type[nn.Module] = nn.LayerNorm,
             mlp_layer: Type[nn.Module] = Mlp,
+            tensor_par_size = 1,
+            tensor_par_group = None,
     ) -> None:
         super().__init__()
         self.norm1 = norm_layer(dim)
@@ -51,6 +53,8 @@ class Block(nn.Module):
             attn_drop=attn_drop,
             proj_drop=proj_drop,
             norm_layer=norm_layer,
+            tensor_par_size = tensor_par_size, 
+            tensor_par_group = tensor_par_group,
         )
         self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
@@ -62,11 +66,15 @@ class Block(nn.Module):
             act_layer=act_layer,
             bias=proj_bias,
             drop=proj_drop,
+            tensor_par_size = tensor_par_size, 
+            tensor_par_group = tensor_par_group,
         )
         self.ls2 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path2 = DropPath(drop_path) if drop_path > 0. else nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+
         x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x))))
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
+
         return x

@@ -9,6 +9,13 @@ from torch import nn as nn
 from timm.layers.grn import GlobalResponseNorm
 from timm.layers.helpers import to_2tuple
 
+import torch.distributed as dist
+
+
+from climate_learn.utils.dist_functions import F_AllReduce_B_Identity as F_AllReduce_B_Identity
+from climate_learn.utils.dist_functions import F_Identity_B_AllReduce as F_Identity_B_AllReduce
+
+
 
 class Mlp(nn.Module):
     """ MLP as used in Vision Transformer, MLP-Mixer and related networks
@@ -25,6 +32,8 @@ class Mlp(nn.Module):
             bias=True,
             drop=0.,
             use_conv=False,
+            tensor_par_size: int = 1,
+            tensor_par_group = None,
     ):
         super().__init__()
         out_features = out_features or in_features
@@ -33,20 +42,28 @@ class Mlp(nn.Module):
         drop_probs = to_2tuple(drop)
         linear_layer = partial(nn.Conv2d, kernel_size=1) if use_conv else nn.Linear
 
-        self.fc1 = linear_layer(in_features, hidden_features, bias=bias[0])
+        self.tensor_par_size = tensor_par_size
+        self.tensor_par_group = tensor_par_group
+
+        self.fc1 = linear_layer(in_features, hidden_features//tensor_par_size, bias=bias[0])
         self.act = act_layer()
         self.drop1 = nn.Dropout(drop_probs[0])
         self.norm = norm_layer(hidden_features) if norm_layer is not None else nn.Identity()
-        self.fc2 = linear_layer(hidden_features, out_features, bias=bias[1])
+        self.fc2 = linear_layer(hidden_features//tensor_par_size, out_features, bias=bias[1])
         self.drop2 = nn.Dropout(drop_probs[1])
 
     def forward(self, x):
+        x= F_Identity_B_AllReduce(x, group=self.tensor_par_group)
+
         x = self.fc1(x)
         x = self.act(x)
         x = self.drop1(x)
         x = self.norm(x)
         x = self.fc2(x)
         x = self.drop2(x)
+
+        x = F_AllReduce_B_Identity (x, op=dist.ReduceOp.SUM, group=self.tensor_par_group)
+
         return x
 
 
