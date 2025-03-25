@@ -19,6 +19,8 @@ class Attention(nn.Module):
             attn_drop: float = 0.,
             proj_drop: float = 0.,
             norm_layer: Type[nn.Module] = nn.LayerNorm,
+            tensor_par_size = 1, 
+            tensor_par_group = None,
     ) -> None:
         super().__init__()
         assert dim % num_heads == 0, 'dim should be divisible by num_heads'
@@ -26,17 +28,21 @@ class Attention(nn.Module):
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
         self.fused_attn = fused_attn
+        self.tensor_par_size = tensor_par_size
+        self.tensor_par_group = tensor_par_group
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.qkv = nn.Linear(dim, dim * 3 //self.tensor_par_size, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim, bias=proj_bias)
+        self.proj = nn.Linear(dim//self.tensor_par_size, dim, bias=proj_bias)
         self.proj_drop = nn.Dropout(proj_drop)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        x= F_Identity_B_AllReduce(x, group=self.tensor_par_group)
+
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads // self.tensor_par_size, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
         q, k = self.q_norm(q), self.k_norm(k)
 
@@ -52,9 +58,12 @@ class Attention(nn.Module):
             attn = self.attn_drop(attn)
             x = attn @ v
 
-        x = x.transpose(1, 2).reshape(B, N, C)
+        x = x.transpose(1, 2).reshape(B, N, C//self.tensor_par_size)
         x = self.proj(x)
         x = self.proj_drop(x)
+
+        dist.all_reduce(x, op=dist.ReduceOp.SUM, group=self.tensor_par_group)
+
         return x
 
 
