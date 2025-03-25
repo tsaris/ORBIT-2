@@ -407,12 +407,15 @@ class _Broadcast(Function):
 class _F_Identity_B_Identity(Function):
     @staticmethod
     def forward(ctx, tensor):
+        ctx.rank = dist.get_rank()
+
         return tensor
 
     @staticmethod
     def backward(ctx, grad_output):
 
-        print("rank",dist.get_rank(),"grad_output[0,0,0]",grad_output[0,0,0],flush=True)
+        if ctx.rank==0 or ctx.rank==1:
+            print("rank",ctx.rank,"grad_output[0,0,0]",grad_output[0,0,0],flush=True)
         return (grad_output)
 
 
