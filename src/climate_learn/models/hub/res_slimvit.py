@@ -12,7 +12,7 @@ from .components.attention import VariableMapping_Attention
 from einops import rearrange
 from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed_on_the_fly
 from climate_learn.models.hub.components.patch_embed import PatchEmbed 
-from climate_learn.utils.dist_functions import F_Identity_B_Broadcast
+from climate_learn.utils.dist_functions import F_Identity_B_Broadcast, Grad_Inspect
 
 
 @register("res_slimvit")
@@ -254,8 +254,18 @@ class Res_Slim_ViT(nn.Module):
 
         x = x + var_embed.unsqueeze(2)  # B, V, L, D
 
+
+        if torch.distributed.get_rank()==0 or torch.distributed.get_rank()==1:
+            print("after var_embed. x[0,0,0,0]",x[0,0,0,0],flush=True)
+
         # variable aggregation
         x = self.aggregate_variables(x)  # B, L, D, 
+
+
+
+        if torch.distributed.get_rank()==0 or torch.distributed.get_rank()==1:
+            print("after aggregate_variables. x[0,0,0]",x[0,0,0],flush=True)
+
 
         # x.shape = [B,num_patches,embed_dim]
 
@@ -276,11 +286,39 @@ class Res_Slim_ViT(nn.Module):
 
         x = x + spatial_emb  # B, L, D
 
+
+
+        if torch.distributed.get_rank()==0 or torch.distributed.get_rank()==1:
+            print("after add spatial embedding. x[0,0,0]",x[0,0,0],flush=True)
+
+
+
+
+
         x = self.pos_drop(x)
+
+        if self.tensor_par_size>1:
+            src_rank = dist.get_rank() - dist.get_rank(group=self.tensor_par_group)
+            dist.broadcast(x, src_rank , group=self.tensor_par_group)
+
+
+        if torch.distributed.get_rank()==0 or torch.distributed.get_rank()==1:
+            print("after pos dropout broadcast. x[0,0,0]",x[0,0,0],"x[0,0,1]",x[0,0,1],flush=True)
+
+
+
+
         for blk in self.blocks:
             x = blk(x)
         # x.shape = [B,num_patches,embed_dim]
         x = self.norm(x)
+
+
+        if torch.distributed.get_rank()==0 or torch.distributed.get_rank()==1:
+            print("after self.norm. x[0,0,0]",x[0,0,0],"x[0,0,1]",x[0,0,1],flush=True)
+
+
+
         return x
 
     
@@ -309,6 +347,13 @@ class Res_Slim_ViT(nn.Module):
 
         #decoder
         x = self.head(x) 
+
+
+        if torch.distributed.get_rank()==0 or torch.distributed.get_rank()==1:
+            print("after self.head. x[0,0,0]",x[0,0,0],"x[0,0,1]",x[0,0,1],flush=True)
+
+
+
         # x.shape = [B,num_patches,out_channels*patch_size*patch_size]
         x = self.unpatchify(x,scaling=self.superres_mag, out_channels=self.out_channels)
         # x.shape = [B,out_channels,h*patch_size, w*patch_size]
@@ -318,5 +363,11 @@ class Res_Slim_ViT(nn.Module):
             preds = x + path2_result[:,:,0:x.size(dim=2),0:x.size(dim=3)]
         else:
             preds = x + path2_result
+
+
+        if torch.distributed.get_rank()==0 or torch.distributed.get_rank()==1:
+            print("after  add path2. preds[0,0,0,0]",preds[0,0,0,0],"preds[0,0,0,1]",preds[0,0,0,1],flush=True)
+
+
 
         return preds
