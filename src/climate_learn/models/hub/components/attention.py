@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Type
 from climate_learn.utils.dist_functions import F_Identity_B_AllReduce, F_Identity_B_AllReduce_VariableMapping
-
+import torch.distributed as dist
 
 class VariableMapping_Attention(nn.Module):
     def __init__(
@@ -75,6 +75,6 @@ class VariableMapping_Attention(nn.Module):
         x = self.proj_drop(x)
 
         if self.tensor_par_size >1:
-            x= F_Identity_B_AllReduce_VariableMapping(x, group=self.tensor_par_group)
+            dist.all_reduce(x, op=dist.ReduceOp.SUM, group=self.tensor_par_group)
 
         return x
