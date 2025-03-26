@@ -8,6 +8,9 @@ from timm.layers import DropPath, use_fused_attn
 from timm.models.vision_transformer import LayerScale
 from torch.jit import Final
 
+import xformers
+from xformers.components.attention.core import scaled_dot_product_attention as xformers_sdpa
+
 class Mlp(nn.Module):
     """ MLP as used in Vision Transformer, MLP-Mixer and related networks
     """
@@ -65,6 +68,10 @@ class Attention(nn.Module):
         self.scale = self.head_dim ** -0.5
         self.fused_attn = use_fused_attn()
 
+        self.fa_algo = None
+        if 'FA_ALGO' in os.environ:
+            self.fa_algo = os.environ['FA_ALGO']
+
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -78,19 +85,51 @@ class Attention(nn.Module):
         q, k, v = qkv.unbind(0)
         q, k = self.q_norm(q), self.k_norm(k)
 
-        if self.fused_attn:
-            x = F.scaled_dot_product_attention(
-                q, k, v,
-                dropout_p=self.attn_drop.p if self.training else 0.,
-            )
+###############
+        if (self.fa_algo == "CK"):
+            x = xformers.ops.memory_efficient_attention(
+            q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2),
+            p=self.attn_drop.p,
+            #op=xformers.ops.MemoryEfficientAttentionSplitKCkOp
+            #op=xformers.ops.MemoryEfficientAttentionFlashAttentionOp
+            op=xformers.ops.MemoryEfficientAttentionCkOp
+            #op=xformers.ops.fmha.MemoryEfficientAttentionCkOp
+            #op=xformers.ops.fmha.MemoryEfficientAttentionCkDecoderOp
+            #op=xformers.ops.MemoryEfficientAttentionOp
+            )#.transpose(1, 2)
+
+            #x = x.transpose(1, 2).reshape(B, N, C)
+            x = x.reshape(B, N, C)
+        elif (self.fa_algo == "SDPA"):
+            #with torch.backends.cuda.sdp_kernel(enable_mem_efficient=False, enable_flash=False, enable_math=True):
+            with torch.backends.cuda.sdp_kernel(enable_mem_efficient=False, enable_flash=True, enable_math=False):
+                x = F.scaled_dot_product_attention(
+                    q, k, v,
+                    dropout_p=self.attn_drop.p if self.training else 0.,
+                )
+            x = x.transpose(1, 2).reshape(B, N, C)
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
             x = attn @ v
-
-        x = x.transpose(1, 2).reshape(B, N, C)
+            x = x.transpose(1, 2).reshape(B, N, C)
+###############
+#        if self.fused_attn:
+#            x = F.scaled_dot_product_attention(
+#                q, k, v,
+#                dropout_p=self.attn_drop.p if self.training else 0.,
+#            )
+#        else:
+#            q = q * self.scale
+#            attn = q @ k.transpose(-2, -1)
+#            attn = attn.softmax(dim=-1)
+#            attn = self.attn_drop(attn)
+#            x = attn @ v
+#
+#        x = x.transpose(1, 2).reshape(B, N, C)
+################
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
