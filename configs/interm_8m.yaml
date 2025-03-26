@@ -1,24 +1,25 @@
 #-----------   TRAINER -------------
 trainer:
   max_epochs: 100
-  checkpoint:  
+  checkpoint: 
   pretrain:
   batch_size: 32
-  buffer_size: 300
+  buffer_size: 400
   num_workers: 1
   data_type: bfloat16
   train_loss: "mse"
 
 #----------  Parallelism -------------
 parallelism:
-  fsdp: 8
-  simple_ddp: 1
-  tensor_par: 1
+  fsdp: 1
+  simple_ddp: 8
+  tensor_par: 2
+  seq_par: 1
   
 # ---------------------------- MODEL -------------------------------------------
 model:
   preset: res_slimvit
-  lr: 2e-3
+  lr: 1e-3
   weight_decay: 1e-5
   beta_1: 0.9
   beta_2: 0.99
