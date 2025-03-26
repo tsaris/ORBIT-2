@@ -1,19 +1,20 @@
-#in_variables.index("orography" Local application
 from .components.cnn_blocks import PeriodicConv2D
 from .components.pos_embed import get_2d_sincos_pos_embed
 from .utils import register
-
-# Third party
 import torch
 import torch.nn as nn
-from timm.models.vision_transformer import trunc_normal_
-from .components.attention import VariableMapping_Attention
-from .components.building_blocks import Block
-from einops import rearrange
 from functools import lru_cache
 import numpy as np
-from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed_on_the_fly
-from climate_learn.models.hub.components.patch_embed import PatchEmbed 
+import torch.distributed as dist
+# Third party
+from timm.models.vision_transformer import trunc_normal_
+from .components.attention import VariableMapping_Attention
+from einops import rearrange
+from .components.pos_embed import interpolate_pos_embed_on_the_fly
+from .components.patch_embed import PatchEmbed 
+from .components.vit_blocks import Block
+from climate_learn.utils.dist_functions import F_Identity_B_Broadcast, Grad_Inspect
+
 
 @register("res_slimvit")
 class Res_Slim_ViT(nn.Module):
@@ -35,6 +36,8 @@ class Res_Slim_ViT(nn.Module):
         decoder_depth=8,
         num_heads=16,
         mlp_ratio=4.0,
+        tensor_par_size = 1,
+        tensor_par_group = None,
     ):
         super().__init__()
         self.default_vars = default_vars
@@ -50,6 +53,10 @@ class Res_Slim_ViT(nn.Module):
         self.history = history
         self.embed_dim = embed_dim
         self.spatial_resolution = 0
+        self.tensor_par_size = tensor_par_size
+        self.tensor_par_group = tensor_par_group
+
+
         self.spatial_embed = nn.Linear(1, embed_dim)
         
         self.token_embeds = nn.ModuleList(
@@ -66,24 +73,28 @@ class Res_Slim_ViT(nn.Module):
         self.var_query = nn.Parameter(torch.zeros(1, 1, embed_dim), requires_grad=True)
 
         #self.var_agg = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
-        self.var_agg = VariableMapping_Attention(embed_dim, fused_attn=False, num_heads=num_heads, qkv_bias=False)
+        self.var_agg = VariableMapping_Attention(embed_dim, fused_attn=True, num_heads=num_heads, qkv_bias=False,tensor_par_size = tensor_par_size, tensor_par_group = tensor_par_group)
         
         self.pos_embed = nn.Parameter(
             torch.zeros(1, self.num_patches, embed_dim), requires_grad=learn_pos_emb
         )
         self.pos_drop = nn.Dropout(p=drop_rate)
         dpr = [x.item() for x in torch.linspace(0, drop_path, depth)]
+
         self.blocks = nn.ModuleList(
             [
                 Block(
                     embed_dim,
-                    num_heads,
-                    mlp_ratio,
+                    num_heads =num_heads, 
+                    fused_attn=True,
+                    mlp_ratio = mlp_ratio,
                     qkv_bias=True,
                     drop_path=dpr[i],
                     norm_layer=nn.LayerNorm,
                     proj_drop=drop_rate,
                     attn_drop=drop_rate,
+                    tensor_par_size = tensor_par_size,
+                    tensor_par_group = tensor_par_group,
                 )
                 for i in range(depth)
             ]
@@ -202,14 +213,15 @@ class Res_Slim_ViT(nn.Module):
 
         var_query = self.var_query.expand(x.shape[0], -1, -1).contiguous()
 
-        #src_rank = dist.get_rank() - dist.get_rank(group=self.tensor_par_group)
-
         #x , _ = self.var_agg(var_query, x, x)
         x = self.var_agg(var_query, x)  # BxL, V~ , D, where V~ is the aggregated variables
 
         x = x.squeeze()
 
-#        x= F_Identity_B_Broadcast(x, src_rank, group=self.tensor_par_group)  #must do the backward broadcast because of the randomneess of dropout
+        if self.tensor_par_size >1:
+
+            src_rank = dist.get_rank() - dist.get_rank(group=self.tensor_par_group)
+            x= F_Identity_B_Broadcast(x, src_rank, group=self.tensor_par_group)  #must do the backward broadcast because of the randomneess of dropout
 
         x = x.unflatten(dim=0, sizes=(b, l))  # B, L, V~, D
 
@@ -252,9 +264,6 @@ class Res_Slim_ViT(nn.Module):
 
         # x.shape = [B,num_patches,embed_dim]
 
-        #if torch.distributed.get_rank()==0:
-        #    print("after patch_embed x.shape",x.shape,flush=True)
-
 
         pos_emb = interpolate_pos_embed_on_the_fly(self.pos_embed,self.patch_size,self.img_size)
 
@@ -269,11 +278,20 @@ class Res_Slim_ViT(nn.Module):
 
         x = x + spatial_emb  # B, L, D
 
+
         x = self.pos_drop(x)
+
+        if self.tensor_par_size>1:
+            src_rank = dist.get_rank() - dist.get_rank(group=self.tensor_par_group)
+            dist.broadcast(x, src_rank , group=self.tensor_par_group)
+
+
         for blk in self.blocks:
             x = blk(x)
         # x.shape = [B,num_patches,embed_dim]
         x = self.norm(x)
+
+
         return x
 
     
@@ -302,6 +320,7 @@ class Res_Slim_ViT(nn.Module):
 
         #decoder
         x = self.head(x) 
+
         # x.shape = [B,num_patches,out_channels*patch_size*patch_size]
         x = self.unpatchify(x,scaling=self.superres_mag, out_channels=self.out_channels)
         # x.shape = [B,out_channels,h*patch_size, w*patch_size]
