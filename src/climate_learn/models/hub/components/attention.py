@@ -5,7 +5,8 @@ from typing import Type
 from climate_learn.utils.dist_functions import F_Identity_B_AllReduce, F_Identity_B_AllReduce_VariableMapping
 import torch.distributed as dist
 
-
+import xformers
+from xformers.components.attention.core import scaled_dot_product_attention as xformers_sdpa
 
 class Attention(nn.Module):
     def __init__(
@@ -31,6 +32,10 @@ class Attention(nn.Module):
         self.tensor_par_size = tensor_par_size
         self.tensor_par_group = tensor_par_group
 
+        self.fa_algo = None
+        if 'FA_ALGO' in os.environ:
+            self.fa_algo = os.environ['FA_ALGO']
+
         self.qkv = nn.Linear(dim, dim * 3 //self.tensor_par_size, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
         self.k_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -45,20 +50,51 @@ class Attention(nn.Module):
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads // self.tensor_par_size, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
         q, k = self.q_norm(q), self.k_norm(k)
+###############
+        if (self.fa_algo == "CK"):
+            x = xformers.ops.memory_efficient_attention(
+            q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2),
+            p=self.attn_drop.p,
+            #op=xformers.ops.MemoryEfficientAttentionSplitKCkOp
+            #op=xformers.ops.MemoryEfficientAttentionFlashAttentionOp
+            op=xformers.ops.MemoryEfficientAttentionCkOp
+            #op=xformers.ops.fmha.MemoryEfficientAttentionCkOp
+            #op=xformers.ops.fmha.MemoryEfficientAttentionCkDecoderOp
+            #op=xformers.ops.MemoryEfficientAttentionOp
+            )#.transpose(1, 2)
 
-        if self.fused_attn:
-            x = F.scaled_dot_product_attention(
-                q, k, v,
-                dropout_p=self.attn_drop.p if self.training else 0.,
-            )
+            #x = x.transpose(1, 2).reshape(B, N, C//self.tensor_par_size)
+            x = x.reshape(B, N, C//self.tensor_par_size)
+        elif (self.fa_algo == "SDPA"):
+            #with torch.backends.cuda.sdp_kernel(enable_mem_efficient=False, enable_flash=False, enable_math=True):
+            with torch.backends.cuda.sdp_kernel(enable_mem_efficient=False, enable_flash=True, enable_math=False):
+                x = F.scaled_dot_product_attention(
+                    q, k, v,
+                    dropout_p=self.attn_drop.p if self.training else 0.,
+                )
+            x = x.transpose(1, 2).reshape(B, N, C//self.tensor_par_size)
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
             x = attn @ v
-
-        x = x.transpose(1, 2).reshape(B, N, C//self.tensor_par_size)
+            x = x.transpose(1, 2).reshape(B, N, C//self.tensor_par_size)
+###############
+#        if self.fused_attn:
+#            x = F.scaled_dot_product_attention(
+#                q, k, v,
+#                dropout_p=self.attn_drop.p if self.training else 0.,
+#            )
+#        else:
+#            q = q * self.scale
+#            attn = q @ k.transpose(-2, -1)
+#            attn = attn.softmax(dim=-1)
+#            attn = self.attn_drop(attn)
+#            x = attn @ v
+#
+#        x = x.transpose(1, 2).reshape(B, N, C//self.tensor_par_size)
+################
         x = self.proj(x)
         x = self.proj_drop(x)
 
@@ -99,6 +135,10 @@ class VariableMapping_Attention(nn.Module):
         self.tensor_par_size = tensor_par_size
         self.tensor_par_group = tensor_par_group
 
+        self.fa_algo = None
+        if 'FA_ALGO' in os.environ:
+            self.fa_algo = os.environ['FA_ALGO']
+
 
         self.q = nn.Linear(dim, dim//tensor_par_size, bias=qkv_bias)
    
@@ -128,19 +168,51 @@ class VariableMapping_Attention(nn.Module):
         k, v = kv.unbind(0)
         q, k = self.q_norm(q), self.k_norm(k)
 
-        if self.fused_attn:
-            x = F.scaled_dot_product_attention(
-                q, k, v,
-                dropout_p=self.attn_drop.p if self.training else 0.,
-            )
+###############
+        if (self.fa_algo == "CK"):
+            x = xformers.ops.memory_efficient_attention(
+            q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2),
+            p=self.attn_drop.p,
+            #op=xformers.ops.MemoryEfficientAttentionSplitKCkOp
+            #op=xformers.ops.MemoryEfficientAttentionFlashAttentionOp
+            op=xformers.ops.MemoryEfficientAttentionCkOp
+            #op=xformers.ops.fmha.MemoryEfficientAttentionCkOp
+            #op=xformers.ops.fmha.MemoryEfficientAttentionCkDecoderOp
+            #op=xformers.ops.MemoryEfficientAttentionOp
+            )#.transpose(1, 2)
+
+            #x = x.transpose(1, 2).reshape(B, N_a, C//self.tensor_par_size)
+            x = x.reshape(B, N_a, C//self.tensor_par_size)
+        elif (self.fa_algo == "SDPA"):
+            #with torch.backends.cuda.sdp_kernel(enable_mem_efficient=False, enable_flash=False, enable_math=True):
+            with torch.backends.cuda.sdp_kernel(enable_mem_efficient=False, enable_flash=True, enable_math=False):
+                x = F.scaled_dot_product_attention(
+                    q, k, v,
+                    dropout_p=self.attn_drop.p if self.training else 0.,
+                )
+            x = x.transpose(1, 2).reshape(B, N_a, C//self.tensor_par_size)
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
             x = attn @ v
-
-        x = x.transpose(1, 2).reshape(B, N_a, C// self.tensor_par_size)
+            x = x.transpose(1, 2).reshape(B, N_a, C//self.tensor_par_size)
+###############
+#        if self.fused_attn:
+#            x = F.scaled_dot_product_attention(
+#                q, k, v,
+#                dropout_p=self.attn_drop.p if self.training else 0.,
+#            )
+#        else:
+#            q = q * self.scale
+#            attn = q @ k.transpose(-2, -1)
+#            attn = attn.softmax(dim=-1)
+#            attn = self.attn_drop(attn)
+#            x = attn @ v
+#
+#        x = x.transpose(1, 2).reshape(B, N_a, C// self.tensor_par_size)
+################
         x = self.proj(x)
         x = self.proj_drop(x)
 
