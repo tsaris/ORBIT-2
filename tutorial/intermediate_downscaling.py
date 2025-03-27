@@ -47,14 +47,18 @@ def load_checkpoint_pretrain(model, checkpoint_path, pretrain_path, cp_save_path
 
     #load model checkpoint
     if checkpoint_path is not None and world_rank < tensor_par_size:
-        if os.path.exists(checkpoint_path+"_"+"rank"+"_"+str(world_rank)):
+
+        if tensor_par_size >1:
+            checkpoint_path = checkpoint_path+"_"+"rank"+"_"+str(world_rank) 
+
+        if os.path.exists(checkpoint_path):
 
             print("world_rank",world_rank,"model resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
 
             #map_location = 'cuda:'+str(device)
             map_location = 'cpu'
 
-            checkpoint = torch.load(checkpoint_path+"_"+"rank"+"_"+str(world_rank),map_location=map_location)
+            checkpoint = torch.load(checkpoint_path,map_location=map_location)
             model.load_state_dict(checkpoint['model_state_dict'])
 
             del checkpoint
@@ -64,7 +68,10 @@ def load_checkpoint_pretrain(model, checkpoint_path, pretrain_path, cp_save_path
 
     #load pretrained model
     if pretrain_path is not None and world_rank < tensor_par_size:
-        if os.path.exists(pretrain_path+"_"+"rank"+"_"+str(world_rank)):
+        if tensor_par_size >1:
+            pretrain_path = pretrain_path+"_"+"rank"+"_"+str(world_rank)
+
+        if os.path.exists(pretrain_path):
             print("world_rank",world_rank,"load pretrained model",pretrain_path," Pretrain path found.",flush=True)
             _load_pretrained_weights(model,pretrain_path,device,world_rank)  
         else:
@@ -108,7 +115,7 @@ def load_checkpoint_pretrain(model, checkpoint_path, pretrain_path, cp_save_path
 def _load_pretrained_weights(model, pretrain_path, device,world_rank):
     # map_location = 'cuda:'+str(device)
     map_location = 'cpu'
-    checkpoint = torch.load(pretrain_path+"_"+"rank"+"_"+str(world_rank), map_location=map_location)
+    checkpoint = torch.load(pretrain_path, map_location=map_location)
 
     print("Loading pre-trained checkpoint from: %s" % pretrain_path)
     pretrain_model = checkpoint["model_state_dict"]
@@ -627,8 +634,10 @@ def main(device):
                     src_rank = world_rank - tensor_par_size * dist.get_rank(group=data_seq_ort_group) 
                     #map_location = 'cuda:'+str(device)
                     map_location = 'cpu'
-    
-                    checkpoint = torch.load(checkpoint_path+"_"+"rank"+"_"+str(src_rank),map_location=map_location)
+                    if tensor_par_size>1:
+                        checkpoint_path = checkpoint_path+"_"+"rank"+"_"+str(src_rank)
+ 
+                    checkpoint = torch.load(checkpoint_path,map_location=map_location)
                     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
                     scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
                     epoch_start = checkpoint['epoch']+1
@@ -726,13 +735,18 @@ def main(device):
                 scheduler_states = scheduler.state_dict()
         
                 if world_rank < tensor_par_size:
-             
+
+                    if tensor_par_size >1:
+                        file_name = cp_save_path+"/"+"interm"+"_epoch_"+ str(epoch) +".ckpt"+"_"+"rank"+"_"+str(world_rank) 
+                    else:
+                        file_name = cp_save_path+"/"+"interm"+"_epoch_"+ str(epoch) +".ckpt"   
+ 
                     torch.save({
                         'epoch': epoch,
                         'model_state_dict': model_states,
                         'optimizer_state_dict': optimizer_states,
                         'scheduler_state_dict': scheduler_states,
-                        }, cp_save_path+"/"+"interm"+"_epoch_"+ str(epoch) +".ckpt"+"_"+"rank"+"_"+str(world_rank))
+                        }, file_name)
              
                 print("rank",world_rank,"After torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
         
