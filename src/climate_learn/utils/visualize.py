@@ -105,7 +105,7 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     img_max = np.max(img)
 
 
-    if dist.get_rank(group=tensor_par_group)==0:
+    if dist.get_rank()==0:
         plt.figure(figsize=(img.shape[1]/10,img.shape[0]/10))
         plt.imshow(img,cmap='coolwarm',vmin=img_min,vmax=img_max)
         anim = None
@@ -131,7 +131,7 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     ppred_min = np.min(ppred)
     ppred_max = np.max(ppred)
 
-    if dist.get_rank(group=tensor_par_group)==0:
+    if dist.get_rank()==0:
         plt.figure(figsize=(ppred.shape[1]/10,ppred.shape[0]/10))
         plt.imshow(ppred,cmap='coolwarm',vmin=img_min,vmax=img_max)
         plt.show()
@@ -160,7 +160,7 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
         yy= yy[0:ppred.shape[0],0:ppred.shape[1]]
 
 
-    if dist.get_rank(group=tensor_par_group)==0:
+    if dist.get_rank()==0:
         plt.figure(figsize=(yy.shape[1]/10,yy.shape[0]/10))
         plt.imshow(yy,cmap='coolwarm',vmin=img_min,vmax=img_max)
         plt.show()
