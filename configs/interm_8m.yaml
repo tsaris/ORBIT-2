@@ -28,7 +28,7 @@ model:
   eta_min: 1e-8
   superres_mag: 4
   cnn_ratio: 4
-  patch_size: 4
+  patch_size: 2
   embed_dim: 256
   depth: 6
   decoder_depth: 4
