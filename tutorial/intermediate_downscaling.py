@@ -30,7 +30,7 @@ from climate_learn.data.processing.era5_constants import (
     DEFAULT_PRESSURE_LEVELS,
     CONSTANTS
 )
-from timm.models.vision_transformer import Block
+from climate_learn.models.hub.components.vit_blocks import Block
 from climate_learn.models.hub.components.cnn_blocks import (
     DownBlock,
     MiddleBlock,
@@ -41,11 +41,19 @@ from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed
 from climate_learn.dist.profile import *
 
 
-def load_checkpoint_pretrain(model, checkpoint_path, pretrain_path):
+def load_checkpoint_pretrain(model, checkpoint_path, pretrain_path, cp_save_path, tensor_par_size=1,tensor_par_group=None):
+    world_rank = dist.get_rank()
+    local_rank = int(os.environ['SLURM_LOCALID'])
+
     #load model checkpoint
-    if checkpoint_path is not None:
+    if checkpoint_path is not None and world_rank < tensor_par_size:
+
+        if tensor_par_size >1:
+            checkpoint_path = checkpoint_path+"_"+"rank"+"_"+str(world_rank) 
+
         if os.path.exists(checkpoint_path):
-            print("model resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
+
+            print("world_rank",world_rank,"model resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
 
             #map_location = 'cuda:'+str(device)
             map_location = 'cpu'
@@ -56,22 +64,55 @@ def load_checkpoint_pretrain(model, checkpoint_path, pretrain_path):
             del checkpoint
         else:
             print("resume from checkpoint was set to True. But the checkpoint path does not exist.",flush=True)
-
             sys.exit("checkpoint path does not exist")
 
     #load pretrained model
-    if pretrain_path is not None:
+    if pretrain_path is not None and world_rank < tensor_par_size:
+        if tensor_par_size >1:
+            pretrain_path = pretrain_path+"_"+"rank"+"_"+str(world_rank)
+
         if os.path.exists(pretrain_path):
-            print("load pretrained model",pretrain_path," Pretrain path found.",flush=True)
-            _load_pretrained_weights(model,pretrain_path,device)  
+            print("world_rank",world_rank,"load pretrained model",pretrain_path," Pretrain path found.",flush=True)
+            _load_pretrained_weights(model,pretrain_path,device,world_rank)  
         else:
             print("resume from pretrained model was set to True. But the pretrained model path does not exist.",flush=True)
-
             sys.exit("pretrain path does not exist")
 
+    #initialize weights for tensor parallelism when training from scratch
+    if pretrain_path is None and checkpoint_path is None and tensor_par_size > 1:
+        if world_rank==0: 
+            isExist = os.path.exists(cp_save_path)
+      
+            if not isExist:
+                # Create a new directory because it does not exist
+                os.makedirs(cp_save_path)
+                print("The new checkpoint saving directory is created!")    
+
+            #save initialial model weights and distribute to all GPUs in the tensor parallel group to synchronize model weights that do not belong to the training block
+
+            init_model_dict = {k: v for k, v in model.state_dict().items() if ('attn' not in  k and 'mlp' not in k and 'var_agg' not in k)}
+
+            print("training from scratch and tensor_par_size>1. rank",world_rank,"init_model_dict.keys()",init_model_dict.keys(),flush=True)
+
+            torch.save(init_model_dict,
+                    cp_save_path+'/initial_'+str(dist.get_rank())+'.pth')
+
+            del init_model_dict
+
+        dist.barrier(device_ids= [local_rank])
+
+        if world_rank!=0 and world_rank <tensor_par_size:
+
+           #load initial model weights and synchronize model weights that are not in the trianing block among sequence parallel GPUs
+           print("training from scratch. rank",world_rank,flush=True)
+
+           map_location = 'cpu'
+           #map_location = 'cuda:'+str(device)
+           model.load_state_dict(torch.load(cp_save_path+'/initial_'+str(0)+'.pth',map_location=map_location),strict=False)
 
 
-def _load_pretrained_weights(model, pretrain_path, device):
+
+def _load_pretrained_weights(model, pretrain_path, device,world_rank):
     # map_location = 'cuda:'+str(device)
     map_location = 'cpu'
     checkpoint = torch.load(pretrain_path, map_location=map_location)
@@ -112,6 +153,116 @@ def _load_pretrained_weights(model, pretrain_path, device):
 
 
 
+"""
+Setup sequence, data, tensor model, and sequence_plus_data parallel groups
+"""
+
+def init_par_groups(data_par_size, tensor_par_size, seq_par_size, fsdp_size, simple_ddp_size, num_heads):
+
+    world_size = torch.distributed.get_world_size()
+
+    assert seq_par_size ==1, "Sequence parallelism not implemented"
+
+    assert (data_par_size * seq_par_size * tensor_par_size)==world_size, "DATA_PAR_SIZE * SEQ_PAR_SIZE * TENSOR_PAR_SIZE must equal to world_size"
+    assert (num_heads % tensor_par_size) ==0, "model heads % tensor parallel size must be 0"
+
+
+
+    tensor_par_group = None
+
+    for i in range(data_par_size *seq_par_size):
+        ranks = [j for j in range(i*tensor_par_size,(i+1)*tensor_par_size)]
+
+        if world_rank==0:
+            print("i ",i," data_par_size ",data_par_size," SEQ_PAR_SIZE ",seq_par_size," TENSOR_PAR_SIZE ",tensor_par_size," tensor_par_group ranks ",ranks)
+
+        group = dist.new_group(ranks)
+
+        if world_rank in ranks:
+            tensor_par_group = group
+
+
+
+
+    seq_par_group = None
+
+    for t in range(data_par_size):
+        for i in range(tensor_par_size):
+            ranks = [t*tensor_par_size*seq_par_size+i+j*tensor_par_size for j in range(seq_par_size)]
+
+            if world_rank==0:
+                print("i ",i," data_par_size ",data_par_size," SEQ_PAR_SIZE ",seq_par_size, " TENSOR_PAR_SIZE ",tensor_par_size," seq_par_group ranks ",ranks,flush=True)
+
+            group = dist.new_group(ranks)
+
+            if world_rank in ranks:
+
+                seq_par_group = group
+
+
+
+
+    data_par_group = None
+
+    fsdp_group = None
+
+    simple_ddp_group = None
+
+    for i in range(tensor_par_size *seq_par_size):
+        ranks = [i+j*tensor_par_size *seq_par_size for j in range(data_par_size)]
+
+        for k in range(simple_ddp_size):
+            fsdp_begin_idx = k*fsdp_size
+            fsdp_end_idx = (k+1)*fsdp_size
+            fsdp_ranks = ranks[fsdp_begin_idx:fsdp_end_idx]
+
+ 
+            if world_rank==0:
+                print("i ",i," data_par_size ",data_par_size," SEQ_PAR_SIZE ",seq_par_size," TENSOR_PAR_SIZE ",tensor_par_size," fsdp_ranks",fsdp_ranks)
+
+
+            group = dist.new_group(fsdp_ranks)
+            if world_rank in fsdp_ranks:
+                fsdp_group = group
+
+
+        for k in range(fsdp_size):
+            simple_ddp_begin_idx = k
+            simple_ddp_end_idx = len(ranks)
+            simple_ddp_ranks = ranks[simple_ddp_begin_idx:simple_ddp_end_idx:fsdp_size]
+
+ 
+            if world_rank==0:
+                print("i ",i," data_par_size ",data_par_size," SEQ_PAR_SIZE ",seq_par_size," TENSOR_PAR_SIZE ",tensor_par_size," simple_ddp_ranks",simple_ddp_ranks)
+
+            group = dist.new_group(simple_ddp_ranks)
+            if world_rank in simple_ddp_ranks:
+                simple_ddp_group = group
+ 
+        if world_rank==0:
+            print("i ",i," data_par_size ",data_par_size," SEQ_PAR_SIZE ",seq_par_size," TENSOR_PAR_SIZE ",tensor_par_size," data_par_group ranks ",ranks)
+        group = dist.new_group(ranks)
+        if world_rank in ranks:
+            data_par_group = group
+
+
+    data_seq_ort_group = None
+
+    for i in range(tensor_par_size):
+        ranks = [i+tensor_par_size*j for j in range(data_par_size * seq_par_size)]
+
+        if world_rank==0:
+            print("i ",i," data_par_size ",data_par_size," SEQ_PAR_SIZE ",seq_par_size," TENSOR_PAR_SIZE ",tensor_par_size," data_seq_ort_group ranks ",ranks)
+        group = dist.new_group(ranks)
+
+        if world_rank in ranks:
+            data_seq_ort_group = group
+
+    return seq_par_group, data_par_group, tensor_par_group, data_seq_ort_group, fsdp_group, simple_ddp_group
+
+
+
+
 def clip_replace_constant(y, yhat, out_variables):
 
     prcp_index = out_variables.index("total_precipitation_24hr")
@@ -136,7 +287,7 @@ def training_step(
     x, y, in_variables, out_variables = batch
     x = x.to(device)
     y = y.to(device)
-        
+    
     yhat = net.forward(x,in_variables,out_variables)
     yhat = clip_replace_constant(y, yhat, out_variables)
 
@@ -246,9 +397,16 @@ def main(device):
     num_workers = conf['trainer']['num_workers']
     buffer_size = conf['trainer']['buffer_size']
     data_type = conf['trainer']['data_type']
-    train_loss_str = conf['trainer']['train_loss']
-  
+    train_loss_str = conf['trainer']['train_loss'] 
     pretrain_path = conf['trainer']['pretrain']
+
+    fsdp_size = conf['parallelism']['fsdp'] 
+    simple_ddp_size = conf['parallelism']['simple_ddp']
+    tensor_par_size = conf['parallelism']['tensor_par']
+    seq_par_size = conf['parallelism']['seq_par']
+
+
+
     low_res_dir = conf['data']['low_res_dir']
     high_res_dir = conf['data']['high_res_dir']
     preset = conf['model']['preset']
@@ -277,11 +435,20 @@ def main(device):
     drop_path = conf['model']['drop_path']
     drop_rate = conf['model']['drop_rate']
 
+
+    data_par_size = fsdp_size * simple_ddp_size
+
     if world_rank==0:
         print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir,"spatial_resolution",spatial_resolution,"default_vars",default_vars,"preset",preset,"lr",lr,"beta_1",beta_1,"beta_2",beta_2,"weight_decay",weight_decay,"warmup_epochs",warmup_epochs,"warmup_start_lr",warmup_start_lr,"eta_min",eta_min,"superres_mag",superres_mag,"cnn_ratio",cnn_ratio,"patch_size",patch_size,"embed_dim",embed_dim,"depth",depth,"decoder_depth",decoder_depth,"num_heads",num_heads,"mlp_ratio",mlp_ratio,"drop_path",drop_path,"drop_rate",drop_rate,"batch_size",batch_size,"num_workers",num_workers,"buffer_size",buffer_size,"data_type",data_type,"train_loss_str",train_loss_str,flush=True)
+        print("data_par_size",data_par_size,"fsdp_size",fsdp_size,"simple_ddp_size",simple_ddp_size,"tensor_par_size",tensor_par_size,"seq_par_size",seq_par_size,flush=True)
 
 
-    model_kwargs = {'default_vars':default_vars,'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate}
+    #initialize parallelism groups
+    seq_par_group, data_par_group, tensor_par_group, data_seq_ort_group, fsdp_group, simple_ddp_group = init_par_groups(data_par_size = data_par_size, tensor_par_size = tensor_par_size, seq_par_size = seq_par_size, fsdp_size = fsdp_size, simple_ddp_size = simple_ddp_size, num_heads= num_heads)
+
+
+
+    model_kwargs = {'default_vars':default_vars,'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate, 'tensor_par_size':tensor_par_size, 'tensor_par_group':tensor_par_group}
 
 
     if world_rank==0:
@@ -305,6 +472,8 @@ def main(device):
     interval_epochs = 1
 
     epoch_start = 0
+
+    cp_save_path = "checkpoints/climate" 
 
 
     while (epoch_start+interval_epochs) < max_epochs:
@@ -335,11 +504,14 @@ def main(device):
                 high_res_dir[data_key],
                 in_vars,
                 out_vars=out_vars,
+                data_par_size = data_par_size,
+                data_par_group = data_par_group,
                 subsample=1,
                 batch_size=batch_size,
                 buffer_size=buffer_size,
                 num_workers=num_workers,
             ).to(device)
+
             data_module.setup()
     
             if world_rank==0:
@@ -363,7 +535,7 @@ def main(device):
                         print(name, param.data.shape)
     
                 # load from checkpoint for continued training , or from pretrained model weights
-                load_checkpoint_pretrain(model, checkpoint_path, pretrain_path)
+                load_checkpoint_pretrain(model, checkpoint_path, pretrain_path,cp_save_path,tensor_par_size=tensor_par_size,tensor_par_group=tensor_par_group)
     
     
     
@@ -405,30 +577,30 @@ def main(device):
                     # Buffer precision.
                     buffer_dtype=precision_dt,
                 )
-    
+
+                #hybrid sharded FSDP
+                if fsdp_size >1 and simple_ddp_size >1:
+            
+                    print("enter hybrid FSDP",flush=True)
+                    model = FSDP(model, device_id = local_rank, process_group= (fsdp_group,simple_ddp_group),sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.HYBRID_SHARD,auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False) 
                 #fully sharded FSDP
-                model = FSDP(model, device_id = local_rank, process_group= None,sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.FULL_SHARD,auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False)
-    
-    
+                elif fsdp_size >1 and simple_ddp_size==1:
+                    print("enter fully sharded FSDP",flush=True)
+                    model = FSDP(model, device_id = local_rank, process_group= fsdp_group,sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.FULL_SHARD,auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False)
+                else:
+                #no shard only
+                    print("enter NO SHARD only,",flush=True)
+                    model = FSDP(model, device_id = local_rank, process_group= simple_ddp_group,sync_module_states=True, sharding_strategy=dist.fsdp.ShardingStrategy.NO_SHARD,auto_wrap_policy = auto_wrap_policy, mixed_precision=bfloatPolicy, forward_prefetch=True, limit_all_gathers = False)   
     
     
     
             #update spatial resolution, image size, and # variables to model based on datasets
             in_shape, _ = data_module.get_data_dims()
             _, in_height, in_width = in_shape[1:]
-    
+   
             with FSDP.summon_full_params(model):
-                model.data_config(spatial_resolution[data_key],(in_height, in_width),len(in_vars),len(out_vars)) 
-            
-    
-    
-    
-            with FSDP.summon_full_params(model):
-                if torch.distributed.get_rank()==0:
-                    print("outside data_config spatial resol is ",model.module.spatial_resolution,"img_size",model.module.img_size,"in_channels",model.module.in_channels,"out_channels",model.module.out_channels,"num_patches",model.module.num_patches,flush=True)
-    
-    
-    
+                model.data_config(spatial_resolution[data_key],(in_height, in_width),len(in_vars),len(out_vars))  
+
     
             if first_time_bool:
                 #activation checkpointing
@@ -459,10 +631,12 @@ def main(device):
                 if checkpoint_path is not None:
     
                     print("optimizer resume from checkpoint",checkpoint_path," Checkpoint path found.",flush=True)
-    
+                    src_rank = world_rank - tensor_par_size * dist.get_rank(group=data_seq_ort_group) 
                     #map_location = 'cuda:'+str(device)
                     map_location = 'cpu'
-    
+                    if tensor_par_size>1:
+                        checkpoint_path = checkpoint_path+"_"+"rank"+"_"+str(src_rank)
+ 
                     checkpoint = torch.load(checkpoint_path,map_location=map_location)
                     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
                     scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
@@ -515,7 +689,7 @@ def main(device):
     
                     epoch_loss += loss.detach()
         
-                    if world_rank==0:
+                    if world_rank==0 or world_rank==1:
                         print("epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," loss ",loss,flush=True)
         
                     optimizer.zero_grad()
@@ -525,8 +699,8 @@ def main(device):
                     #timer.begin("optimizer_step")
                     optimizer.step()
                     #timer.end("optimizer_step")
-    
-        
+   
+                    
                     if world_rank==0:
                         print("rank",world_rank,"batch_idx",batch_idx,"get_lr ",scheduler.get_lr(),"after optimizer step torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
     
@@ -545,34 +719,38 @@ def main(device):
     
    
                 if world_rank ==0:    
-                    checkpoint_path = "checkpoints/climate" 
                     # Check whether the specified checkpointing path exists or not
-                    isExist = os.path.exists(checkpoint_path)
+                    isExist = os.path.exists(cp_save_path)
                     if not isExist:
                         # Create a new directory because it does not exist
-                        os.makedirs(checkpoint_path)
-                        print("The new checkpoint directory is created!")        
+                        os.makedirs(cp_save_path)
+                        print("The new checkpoint save directory is created!")        
         
-        
-                print("rank",world_rank,"Before torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
+                if world_rank ==0:     
+                    print("rank",world_rank,"Before torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
         
         
                 model_states = model.state_dict()
                 optimizer_states = optimizer.state_dict()
                 scheduler_states = scheduler.state_dict()
         
-                if world_rank == 0 :
-             
+                if world_rank < tensor_par_size:
+
+                    if tensor_par_size >1:
+                        file_name = cp_save_path+"/"+"interm"+"_epoch_"+ str(epoch) +".ckpt"+"_"+"rank"+"_"+str(world_rank) 
+                    else:
+                        file_name = cp_save_path+"/"+"interm"+"_epoch_"+ str(epoch) +".ckpt"   
+ 
                     torch.save({
                         'epoch': epoch,
                         'model_state_dict': model_states,
                         'optimizer_state_dict': optimizer_states,
                         'scheduler_state_dict': scheduler_states,
-                        }, checkpoint_path+"/"+"interm"+"_rank_"+str(world_rank)+"_epoch_"+ str(epoch) +".ckpt")
+                        }, file_name)
              
                 print("rank",world_rank,"After torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
         
-                dist.barrier()
+                dist.barrier(device_ids= [local_rank])
                 del model_states
                 del optimizer_states
                 del scheduler_states

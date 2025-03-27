@@ -2,8 +2,8 @@
 #SBATCH -A lrn036
 #SBATCH -J flash
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:1
-#SBATCH --ntasks-per-node=1
+#SBATCH --gres=gpu:8
+#SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
 #SBATCH -t 00:10:00
 #SBATCH -p batch
@@ -56,7 +56,8 @@ export ORBIT_USE_DDSTORE=0 ## 1 (enabled) or 0 (disable)
 
 
 #time srun -n $((SLURM_JOB_NUM_NODES*1)) python ./visualize.py ../configs/era5_era5.yaml
-time srun -n $((SLURM_JOB_NUM_NODES*1)) python ./visualize.py ../configs/interm_117m.yaml
+#time srun -n $((SLURM_JOB_NUM_NODES*1)) python ./visualize.py ../configs/interm_117m.yaml
+time srun -n $((SLURM_JOB_NUM_NODES*8)) python ./visualize.py ../configs/interm_8m.yaml
 #time srun -n $((SLURM_JOB_NUM_NODES*1)) python ./visualize.py ../configs/inference.yaml
 
 

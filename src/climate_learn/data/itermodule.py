@@ -37,6 +37,8 @@ class IterDataModule(torch.nn.Module):
         out_root_dir,
         in_vars,
         out_vars,
+        data_par_size: int = 1,
+        data_par_group=None,
         src=None,
         history=1,
         window=6,
@@ -61,7 +63,9 @@ class IterDataModule(torch.nn.Module):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.pin_memory = pin_memory
-        self.ddp_group = dist.distributed_c10d._get_default_group()
+        self.data_par_group = data_par_group
+        self.data_par_size = data_par_size
+
 
         if task in ("direct-forecasting", "iterative-forecasting"):
             self.dataset_caller = DirectForecast
@@ -191,6 +195,7 @@ class IterDataModule(torch.nn.Module):
         # load datasets only if they're not loaded already
         use_ddstore = int(os.environ.get("ORBIT_USE_DDSTORE", 0))
         print("use_ddstore is :", use_ddstore, flush=True)
+
         if use_ddstore:
             self.data_train = IndividualDataIter(
                 self.dataset_caller(
@@ -199,6 +204,8 @@ class IterDataModule(torch.nn.Module):
                         out_file_list=self.out_lister_train,
                         variables=self.in_vars,
                         out_variables=self.out_vars,
+                        data_par_size = self.data_par_size,
+                        data_par_group = self.data_par_group,
                         shuffle=True,
                     ),
                     **self.dataset_arg,
@@ -215,6 +222,8 @@ class IterDataModule(torch.nn.Module):
                         out_file_list=self.out_lister_val,
                         variables=self.in_vars,
                         out_variables=self.out_vars,
+                        data_par_size = self.data_par_size,
+                        data_par_group = self.data_par_group,
                         shuffle=False,
                     ),
                     **self.dataset_arg,
@@ -231,6 +240,8 @@ class IterDataModule(torch.nn.Module):
                         out_file_list=self.out_lister_test,
                         variables=self.in_vars,
                         out_variables=self.out_vars,
+                        data_par_size = self.data_par_size,
+                        data_par_group = self.data_par_group,
                         shuffle=False,
                     ),
                     **self.dataset_arg,
@@ -251,6 +262,8 @@ class IterDataModule(torch.nn.Module):
                                 out_file_list=self.out_lister_train,
                                 variables=self.in_vars,
                                 out_variables=self.out_vars,
+                                data_par_size = self.data_par_size,
+                                data_par_group = self.data_par_group,
                                 shuffle=True,
                             ),
                             **self.dataset_arg,
@@ -269,6 +282,8 @@ class IterDataModule(torch.nn.Module):
                             out_file_list=self.out_lister_val,
                             variables=self.in_vars,
                             out_variables=self.out_vars,
+                            data_par_size = self.data_par_size,
+                            data_par_group = self.data_par_group,
                             shuffle=False,
                         ),
                         **self.dataset_arg,
@@ -285,6 +300,8 @@ class IterDataModule(torch.nn.Module):
                             out_file_list=self.out_lister_test,
                             variables=self.in_vars,
                             out_variables=self.out_vars,
+                            data_par_size = self.data_par_size,
+                            data_par_group = self.data_par_group,
                             shuffle=False,
                         ),
                         **self.dataset_arg,
@@ -301,6 +318,8 @@ class IterDataModule(torch.nn.Module):
                         out_file_list=self.out_lister_test,
                         variables=self.in_vars,
                         out_variables=self.out_vars,
+                        data_par_size = self.data_par_size,
+                        data_par_group = self.data_par_group,
                         shuffle=False,
                     ),
                     **self.dataset_arg,
@@ -320,16 +339,16 @@ class IterDataModule(torch.nn.Module):
             os.environ["FABRIC_IFACE"] = f"hsn{gpu_id//2}"
             print("FABRIC_IFACE:", os.environ["FABRIC_IFACE"])
 
-            ddp_group_size = dist.get_world_size(group=self.ddp_group)
-            ddp_group_rank = dist.get_rank(group=self.ddp_group)
+            data_group_size = self.data_par_size
+            data_group_rank = dist.get_rank(group=self.data_par_group)
 
             trainset = DistDataset(
                 self.data_train,
                 "trainset",
-                ddp_group = self.ddp_group,
+                data_par_group = self.data_par_group,
                 )
 
-            sampler = torch.utils.data.distributed.DistributedSampler(trainset, num_replicas=ddp_group_size, rank=ddp_group_rank, shuffle=True)
+            sampler = torch.utils.data.distributed.DistributedSampler(trainset, num_replicas=data_par_size, rank=data_group_rank, shuffle=True)
 
             train_loader = DDStoreDataLoader(
             # train_loader = torch.utils.data.DataLoader(

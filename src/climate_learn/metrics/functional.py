@@ -139,8 +139,12 @@ def bayesian_tv(
 
 
     prior_weight =0.02
+    prior_error = prior_weight*(pixel_dif1+pixel_dif2 + 0.7*pixel_dif3+0.7*pixel_dif4)
 
-    error = mse_error +prior_weight*(pixel_dif1+pixel_dif2 + 0.7*pixel_dif3+0.7*pixel_dif4)
+
+    error = mse_error + prior_error
+    if torch.distributed.get_rank()==0:
+        print("torch.mean(mse_error)",torch.mean(mse_error),"torch.mean(prior_error)",torch.mean(prior_error),flush=True)
 
     #print('during  mse with error', error.dtype, pred.dtype, target.dtype)
     if lat_weights is not None:
