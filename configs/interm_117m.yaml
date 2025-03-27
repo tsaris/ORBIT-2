@@ -2,13 +2,21 @@
 trainer:
   max_epochs: 100
   checkpoint: 
-  pretrain: "./checkpoints/climate/intermediate_117m.ckpt" 
+  pretrain: 
   batch_size: 8 
   buffer_size: 100
   num_workers: 2
   data_type: bfloat16
   train_loss: "mse"
 
+
+#----------  Parallelism -------------
+parallelism:
+  fsdp: 4
+  simple_ddp: 4
+  tensor_par: 1
+  seq_par: 1
+ 
 # ---------------------------- MODEL -------------------------------------------
 model:
   preset: res_slimvit
