@@ -3,6 +3,7 @@ import matplotlib.animation as animation
 import numpy as np
 import torchvision
 import torch
+import torch.distributed as dist
 from scipy.stats import rankdata
 from tqdm import tqdm
 from ..data.processing.era5_constants import VAR_TO_UNIT as ERA5_VAR_TO_UNIT
@@ -33,7 +34,7 @@ def clip_replace_constant(y, yhat, out_variables):
 
 
 
-def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, src, device, index=0):
+def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, src, device, index=0, tensor_par_size=1,tensor_par_group=None):
 
     lat, lon = dm.get_lat_lon()
     extent = [lon.min(), lon.max(), lat.min(), lat.max()]
@@ -62,16 +63,16 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
         x, y = batch[:2]
         in_variables = batch[2]
         out_variables = batch[3]
-
         batch_size = x.shape[0]
         if index in range(counter, counter + batch_size):
             adj_index = index - counter
             x = x.to(device)
             pred = mm.forward(x,in_variables,out_variables)
+
             pred = clip_replace_constant(y, pred, out_variables)
 
             print("x.shape",x.shape,"y.shape",y.shape,"pred.shape",pred.shape,flush=True)
-
+            
             break
         counter += batch_size
 
@@ -104,11 +105,12 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     img_max = np.max(img)
 
 
-    plt.figure(figsize=(img.shape[1]/10,img.shape[0]/10))
-    plt.imshow(img,cmap='coolwarm',vmin=img_min,vmax=img_max)
-    anim = None
-    plt.show()
-    plt.savefig('input.png')
+    if dist.get_rank(group=tensor_par_group)==0:
+        plt.figure(figsize=(img.shape[1]/10,img.shape[0]/10))
+        plt.imshow(img,cmap='coolwarm',vmin=img_min,vmax=img_max)
+        anim = None
+        plt.show()
+        plt.savefig('input.png')
 
 
     print("img.shape",img.shape,"min",img_min,"max",img_max,flush=True)
@@ -118,6 +120,7 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     ppred = out_transform(pred[adj_index])
  
     ppred = ppred[out_channel].detach().cpu().numpy()
+
     if "ERA5" in src:
         ppred = np.flip(ppred, 0)
     elif src == "PRISM":
@@ -128,11 +131,11 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     ppred_min = np.min(ppred)
     ppred_max = np.max(ppred)
 
-
-    plt.figure(figsize=(ppred.shape[1]/10,ppred.shape[0]/10))
-    plt.imshow(ppred,cmap='coolwarm',vmin=img_min,vmax=img_max)
-    plt.show()
-    plt.savefig('prediction.png')
+    if dist.get_rank(group=tensor_par_group)==0:
+        plt.figure(figsize=(ppred.shape[1]/10,ppred.shape[0]/10))
+        plt.imshow(ppred,cmap='coolwarm',vmin=img_min,vmax=img_max)
+        plt.show()
+        plt.savefig('prediction.png')
 
     print("ppred.shape",ppred.shape,"min",ppred_min,"max",ppred_max,flush=True)
  
@@ -156,14 +159,16 @@ def visualize_at_index(mm, dm, out_list, in_transform, out_transform,variable, s
     if yy.shape[0]!=ppred.shape[0] or yy.shape[1]!=ppred.shape[1]:
         yy= yy[0:ppred.shape[0],0:ppred.shape[1]]
 
-    plt.figure(figsize=(yy.shape[1]/10,yy.shape[0]/10))
-    plt.imshow(yy,cmap='coolwarm',vmin=img_min,vmax=img_max)
-    plt.show()
-    plt.savefig('groundtruth.png')
+
+    if dist.get_rank(group=tensor_par_group)==0:
+        plt.figure(figsize=(yy.shape[1]/10,yy.shape[0]/10))
+        plt.imshow(yy,cmap='coolwarm',vmin=img_min,vmax=img_max)
+        plt.show()
+        plt.savefig('groundtruth.png')
 
 
     # None, if no history
-    return anim
+    return None
 
 
 
