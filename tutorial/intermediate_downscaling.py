@@ -30,7 +30,7 @@ from climate_learn.data.processing.era5_constants import (
     DEFAULT_PRESSURE_LEVELS,
     CONSTANTS
 )
-from timm.models.vision_transformer import Block
+from climate_learn.models.hub.components.vit_blocks import Block
 from climate_learn.models.hub.components.cnn_blocks import (
     DownBlock,
     MiddleBlock,
@@ -280,7 +280,7 @@ def training_step(
     x, y, in_variables, out_variables = batch
     x = x.to(device)
     y = y.to(device)
-        
+    
     yhat = net.forward(x,in_variables,out_variables)
     yhat = clip_replace_constant(y, yhat, out_variables)
 
@@ -717,8 +717,8 @@ def main(device):
                         os.makedirs(cp_save_path)
                         print("The new checkpoint save directory is created!")        
         
-        
-                print("rank",world_rank,"Before torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
+                if world_rank ==0:     
+                    print("rank",world_rank,"Before torch.save torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
         
         
                 model_states = model.state_dict()
