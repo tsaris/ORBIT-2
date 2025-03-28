@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH -A LRN036
 #SBATCH -J flash
-#SBATCH --nodes=2
+#SBATCH --nodes=64
 #SBATCH --gres=gpu:8
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
-#SBATCH -t 01:00:00
+#SBATCH -t 02:00:00
 #SBATCH -q debug
 #SBATCH -o flash-%j.out
 #SBATCH -e flash-%j.error
@@ -21,18 +21,20 @@
 source ~/miniconda3/etc/profile.d/conda.sh
 
 module load PrgEnv-gnu
-module load gcc/12.2.0
-module load rocm/6.2.0
+module load rocm/6.2.4
+module unload darshan-runtime
+module unload libfabric
 
 eval "$(/lustre/orion/world-shared/stf218/atsaris/env_test_march/miniconda/bin/conda shell.bash hook)"
 
-conda activate /lustre/orion/lrn036/world-shared/xf9/flash-attention-torch25
+conda activate /lustre/orion/lrn036/world-shared/xf9/torch26
 
 #export LD_LIBRARY_PATH=/lustre/orion/world-shared/stf218/junqi/climax/rccl-plugin-rocm6/lib/:/opt/rocm-6.2.0/lib:$LD_LIBRARY_PATH
 
 ## DDStore and GPTL Timer
+
 module use -a /lustre/orion/world-shared/lrn036/jyc/frontier/sw/modulefiles
-module load SR_tools
+module load libfabric/1.22.0p
 
 
 export MIOPEN_DISABLE_CACHE=1
@@ -48,16 +50,17 @@ export PYTHONPATH=$PWD/../src:$PYTHONPATH
 
 export ORBIT_USE_DDSTORE=0 ## 1 (enabled) or 0 (disable)
 
+export LD_PRELOAD=/lib64/libgcc_s.so.1:/usr/lib64/libstdc++.so.6
+
 #time srun -n $((SLURM_JOB_NUM_NODES*8)) \
 #python ./intermediate_downscaling.py ../configs/interm_117m.yaml
 
+#time srun -n $((SLURM_JOB_NUM_NODES*8)) \
+#python ./intermediate_downscaling.py ../configs/interm_8m.yaml
+
 
 time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-python ./intermediate_downscaling.py ../configs/interm_8m.yaml
+python ./intermediate_downscaling.py ../configs/interm_1b.yaml
 
 
-#time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-#python ./intermediate_downscaling.py ../configs/era5_era5.yaml
-#time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-#python ./intermediate_downscaling.py ../configs/prism_prism.yaml
 
