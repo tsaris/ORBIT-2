@@ -51,6 +51,8 @@ class IterDataModule(torch.nn.Module):
         batch_size=64,
         num_workers=0,
         pin_memory=False,
+        div=1,
+        overlap=4,
     ):
         super().__init__()
         self.task = task
@@ -65,7 +67,8 @@ class IterDataModule(torch.nn.Module):
         self.pin_memory = pin_memory
         self.data_par_group = data_par_group
         self.data_par_size = data_par_size
-
+        self.div = div
+        self.overlap = overlap
 
         if task in ("direct-forecasting", "iterative-forecasting"):
             self.dataset_caller = DirectForecast
@@ -149,15 +152,51 @@ class IterDataModule(torch.nn.Module):
                     out_lon,
                 ]
             )
+            ##TODO: change out size
+            out_vars = copy.deepcopy(self.out_vars)
+            if "2m_temperature_extreme_mask" in out_vars:
+                out_vars.remove("2m_temperature_extreme_mask")
+            out_size = torch.Size([self.batch_size, len(out_vars), out_lat, out_lon])
+
         elif self.task == "downscaling":
+            if self.overlap % 2 == 0:
+                top = bottom = self.overlap // 2
+                left = right = self.overlap // 2 * 2
+            else:
+                left = self.overlap // 2 * 2
+                right = ( self.overlap // 2 + 1 ) * 2
+                top = self.overlap // 2
+                bottom = self.overlap // 2 + 1
+
+            #hoverlap = self.overlap * 2
+            #voverlap = self.overlap
+            if self.div == 1:
+                wid = in_lon
+            else:
+                wid = in_lon // self.div + left + right
+            if self.div == 1:
+                hgt = in_lat
+            else:
+                hgt = in_lat // self.div + top + bottom
             in_size = torch.Size(
-                [self.batch_size, len(self.in_vars), in_lat, in_lon]
+                [self.batch_size, len(self.in_vars), hgt, wid]
             )
-        ##TODO: change out size
-        out_vars = copy.deepcopy(self.out_vars)
-        if "2m_temperature_extreme_mask" in out_vars:
-            out_vars.remove("2m_temperature_extreme_mask")
-        out_size = torch.Size([self.batch_size, len(out_vars), out_lat, out_lon])
+            ##TODO: change out size
+            out_vars = copy.deepcopy(self.out_vars)
+            if "2m_temperature_extreme_mask" in out_vars:
+                out_vars.remove("2m_temperature_extreme_mask")
+            if self.div == 1:
+                wid = out_lon
+            else:
+                wid = out_lon // self.div + ( left + right ) * (out_lon//in_lon)
+            if self.div == 1:
+                hgt = out_lat
+            else:
+                hgt = out_lat // self.div + ( top + bottom ) * (out_lat//in_lat)
+            out_size = torch.Size(
+                [self.batch_size, len(out_vars), hgt, wid]
+            )
+
         return in_size, out_size
 
     def get_normalize(self, root_dir, variables):
@@ -207,6 +246,8 @@ class IterDataModule(torch.nn.Module):
                         data_par_size = self.data_par_size,
                         data_par_group = self.data_par_group,
                         shuffle=True,
+                        div=self.div,
+                        overlap=self.overlap,
                     ),
                     **self.dataset_arg,
                 ),
@@ -225,6 +266,8 @@ class IterDataModule(torch.nn.Module):
                         data_par_size = self.data_par_size,
                         data_par_group = self.data_par_group,
                         shuffle=False,
+                        div=self.div,
+                        overlap=self.overlap,
                     ),
                     **self.dataset_arg,
                 ),
@@ -243,6 +286,8 @@ class IterDataModule(torch.nn.Module):
                         data_par_size = self.data_par_size,
                         data_par_group = self.data_par_group,
                         shuffle=False,
+                        div=self.div,
+                        overlap=self.overlap,
                     ),
                     **self.dataset_arg,
                 ),
@@ -265,6 +310,8 @@ class IterDataModule(torch.nn.Module):
                                 data_par_size = self.data_par_size,
                                 data_par_group = self.data_par_group,
                                 shuffle=True,
+                                div=self.div,
+                                overlap=self.overlap,
                             ),
                             **self.dataset_arg,
                         ),
@@ -285,6 +332,8 @@ class IterDataModule(torch.nn.Module):
                             data_par_size = self.data_par_size,
                             data_par_group = self.data_par_group,
                             shuffle=False,
+                            div=self.div,
+                            overlap=self.overlap,
                         ),
                         **self.dataset_arg,
                     ),
@@ -303,6 +352,8 @@ class IterDataModule(torch.nn.Module):
                             data_par_size = self.data_par_size,
                             data_par_group = self.data_par_group,
                             shuffle=False,
+                            div=self.div,
+                            overlap=self.overlap,
                         ),
                         **self.dataset_arg,
                     ),
@@ -321,6 +372,8 @@ class IterDataModule(torch.nn.Module):
                         data_par_size = self.data_par_size,
                         data_par_group = self.data_par_group,
                         shuffle=False,
+                        div=self.div,
+                        overlap=self.overlap,
                     ),
                     **self.dataset_arg,
                 ),
