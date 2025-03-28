@@ -244,6 +244,19 @@ buffer_size = conf['trainer']['buffer_size']
 pretrain_path = conf['trainer']['pretrain']
 data_type = "float32"
 
+try:
+    do_tiling = conf['tiling']['do_tiling']
+    if do_tiling:
+        div = conf['tiling']['div']
+        overlap = conf['tiling']['overlap']
+    else:
+        div = 1
+        overlap = 0
+except:
+    print("Tiling parameter not found. Using default: no tiling", flush=True)
+    do_tiling = False
+    div = 1
+    overlap = 0
 
 tensor_par_size = conf['parallelism']['tensor_par']
 fsdp_size = world_size //tensor_par_size
@@ -305,7 +318,7 @@ if preset!="vit" and preset!="res_slimvit":
 
 
 # Set up data
-data_key = "PRISM"
+data_key = "ERA5_1"
 
 in_vars = dict_in_variables[data_key]
 out_vars = dict_out_variables[data_key]
@@ -331,9 +344,30 @@ data_module = cl.data.IterDataModule(
     batch_size=1,
     buffer_size=buffer_size,
     num_workers=num_workers,
+    div=div,
+    overlap=overlap,
 ).to(device)
 
 data_module.setup()
+
+
+dm_vis = cl.data.IterDataModule(
+    "downscaling",
+    low_res_dir[data_key],
+    high_res_dir[data_key],
+    in_vars,
+    out_vars=out_vars,
+    data_par_size = data_par_size,
+    data_par_group = data_par_group,
+    subsample=1,
+    batch_size=1,
+    buffer_size=buffer_size,
+    num_workers=num_workers,
+    div=1,
+    overlap=0,
+).to(device)
+
+dm_vis.setup()
 
 
 # Set up deep learning model
@@ -352,7 +386,7 @@ denorm = test_transforms[0]
 
 print("denorm is ",denorm,flush=True)
 
-pretrain_path = "./checkpoints/climate/interm_epoch_89.ckpt"
+pretrain_path = "./checkpoints/climate/interm_epoch_5.ckpt"
 
 # load from pretrained model weights
 load_checkpoint_pretrain(model, pretrain_path,tensor_par_size=tensor_par_size,tensor_par_group=tensor_par_group)
@@ -426,6 +460,8 @@ cl.utils.visualize.visualize_at_index(
     variable="2m_temperature_max",
     src=data_key,
     device = device,
+    div=div,
+    overlap=overlap,
     index=0,  # visualize the first sample of the test set
     tensor_par_size=tensor_par_size,
     tensor_par_group=tensor_par_group,
