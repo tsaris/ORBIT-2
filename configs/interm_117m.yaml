@@ -7,7 +7,7 @@ trainer:
   buffer_size: 100
   num_workers: 2
   data_type: bfloat16
-  train_loss: "mse"
+  train_loss: "bayesian_tv"
 
 
 #----------  Parallelism -------------
@@ -16,6 +16,12 @@ parallelism:
   simple_ddp: 4
   tensor_par: 1
   seq_par: 1
+ 
+### Tiling
+tiling:
+  do_tiling: False
+  div: 4
+  overlap: 3
  
 # ---------------------------- MODEL -------------------------------------------
 model:
