@@ -46,12 +46,16 @@ def load_checkpoint_pretrain(model, pretrain_path, tensor_par_size=1,tensor_par_
     world_rank = dist.get_rank()
     local_rank = int(os.environ['SLURM_LOCALID'])
 
+    if tensor_par_size >1:
+        pretrain_path = pretrain_path+"_"+"rank"+"_"+str(world_rank)
+
+
 
     print("world_rank",world_rank,"pretrain_path",pretrain_path,flush=True)
 
     #load pretrained model
     if world_rank < tensor_par_size:
-        if os.path.exists(pretrain_path+"_"+"rank"+"_"+str(world_rank)):
+        if os.path.exists(pretrain_path):
             print("world_rank",world_rank,"load pretrained model",pretrain_path," Pretrain path found.",flush=True)
             _load_pretrained_weights(model,pretrain_path,device,world_rank)  
         else:
@@ -65,7 +69,7 @@ def load_checkpoint_pretrain(model, pretrain_path, tensor_par_size=1,tensor_par_
 def _load_pretrained_weights(model, pretrain_path, device,world_rank):
     # map_location = 'cuda:'+str(device)
     map_location = 'cpu'
-    checkpoint = torch.load(pretrain_path+"_"+"rank"+"_"+str(world_rank), map_location=map_location)
+    checkpoint = torch.load(pretrain_path, map_location=map_location)
 
     print("Loading pre-trained checkpoint from: %s" % pretrain_path)
     pretrain_model = checkpoint["model_state_dict"]
@@ -318,7 +322,7 @@ if preset!="vit" and preset!="res_slimvit":
 
 
 # Set up data
-data_key = "ERA5_1"
+data_key = "PRISM"
 
 in_vars = dict_in_variables[data_key]
 out_vars = dict_out_variables[data_key]
@@ -454,6 +458,7 @@ model.eval()
 cl.utils.visualize.visualize_at_index(
     model,
     data_module,
+    dm_vis,
     out_list=out_vars,
     in_transform=denorm,
     out_transform=denorm,
