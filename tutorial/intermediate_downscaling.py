@@ -414,7 +414,6 @@ def main(device):
             div = 1
             overlap = 0
     except:
-        print("Tiling parameter not found. Using default: no tiling", flush=True)
         do_tiling = False
         div = 1
         overlap = 0
@@ -452,10 +451,7 @@ def main(device):
 
     if world_rank==0:
         print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir,"spatial_resolution",spatial_resolution,"default_vars",default_vars,"preset",preset,"lr",lr,"beta_1",beta_1,"beta_2",beta_2,"weight_decay",weight_decay,"warmup_epochs",warmup_epochs,"warmup_start_lr",warmup_start_lr,"eta_min",eta_min,"superres_mag",superres_mag,"cnn_ratio",cnn_ratio,"patch_size",patch_size,"embed_dim",embed_dim,"depth",depth,"decoder_depth",decoder_depth,"num_heads",num_heads,"mlp_ratio",mlp_ratio,"drop_path",drop_path,"drop_rate",drop_rate,"batch_size",batch_size,"num_workers",num_workers,"buffer_size",buffer_size,"data_type",data_type,"train_loss_str",train_loss_str,flush=True)
-        print("data_par_size",data_par_size,"fsdp_size",fsdp_size,"simple_ddp_size",simple_ddp_size,"tensor_par_size",tensor_par_size,"seq_par_size",seq_par_size,flush=True)
-
-        if do_tiling:
-            print("Image Tile: division",div,"overlap",overlap,flush=True)
+        print("data_par_size",data_par_size,"fsdp_size",fsdp_size,"simple_ddp_size",simple_ddp_size,"tensor_par_size",tensor_par_size,"seq_par_size",seq_par_size,"division",div,"overlap",overlap,flush=True)
 
     #initialize parallelism groups
     seq_par_group, data_par_group, tensor_par_group, data_seq_ort_group, fsdp_group, simple_ddp_group = init_par_groups(data_par_size = data_par_size, tensor_par_size = tensor_par_size, seq_par_size = seq_par_size, fsdp_size = fsdp_size, simple_ddp_size = simple_ddp_size, num_heads= num_heads)
@@ -520,6 +516,8 @@ def main(device):
                 batch_size=batch_size,
                 buffer_size=buffer_size,
                 num_workers=num_workers,
+                div=div,
+                overlap=overlap,
             ).to(device)
 
             data_module.setup()
@@ -531,9 +529,8 @@ def main(device):
                 if yinp % patch_size != 0:
                     if world_rank == 0:
                         print(f"Tile height: {yinp}, patch_size {patch_size}")
-                        print("Overlap must be adjusted to accomodate patch_size of the Transformer")
-                        print("Increase the overlap by ", ( yinp % patch_size ) )
-                    quit()
+                        print("Overlap must be adjusted to accomodate patch_size of the Transformer. Need to increase the overlap by ", ( yinp % patch_size ))
+                        sys.exit("Please increase the overlap accordingly to the instructions in the print message")
     
             if world_rank==0:
                 print("after data_module torch.cuda.memory_reserved: %fGB"%(torch.cuda.memory_reserved(device)/1024/1024/1024),flush=True)
