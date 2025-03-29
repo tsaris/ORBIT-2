@@ -7,7 +7,7 @@ trainer:
   buffer_size: 400
   num_workers: 2
   data_type: bfloat16
-  train_loss: "mse"
+  train_loss: "bayesian_tv"
 
 #----------  Parallelism -------------
 parallelism:
@@ -15,6 +15,13 @@ parallelism:
   simple_ddp: 4
   tensor_par: 1
   seq_par: 1
+
+
+### Tiling
+tiling:
+  do_tiling: False
+  div: 4
+  overlap: 3
   
 # ---------------------------- MODEL -------------------------------------------
 model:
@@ -41,9 +48,9 @@ model:
 data:
   low_res_dir: {
 ## (25/03/09) new variable names
-    'ERA5_1': "/lustre/orion/lrn036/world-shared/data/superres/era5/5.625_deg/",
+#    'ERA5_1': "/lustre/orion/lrn036/world-shared/data/superres/era5/5.625_deg/",
 #    'ERA5_2': "/lustre/orion/lrn036/world-shared/data/superres/era5/1.0_deg/",
-#    'PRISM': "/lustre/orion/lrn036/world-shared/data/superres/prism/10.0_arcmin",
+    'PRISM': "/lustre/orion/lrn036/world-shared/data/superres/prism/10.0_arcmin",
 #    'DAYMET_1': "/lustre/orion/lrn036/world-shared/data/superres/daymet/10.0_arcmin",
 #    'DAYMET_2': "/lustre/orion/lrn036/world-shared/data/superres/daymet/2.0_arcmin",
 # old datasets
@@ -53,9 +60,9 @@ data:
 #    'PRISM': "/lustre/orion/world-shared/lrn036/jyc/frontier/ClimaX-v2/data/prism-superres/10.0_arcmin/",
   }
   high_res_dir: {
-    'ERA5_1': "/lustre/orion/lrn036/world-shared/data/superres/era5/1.40625_deg/",
+#    'ERA5_1': "/lustre/orion/lrn036/world-shared/data/superres/era5/1.40625_deg/",
 #    'ERA5_2': "/lustre/orion/lrn036/world-shared/data/superres/era5/0.25_deg/",
-#    'PRISM': "/lustre/orion/lrn036/world-shared/data/superres/prism/2.5_arcmin",
+    'PRISM': "/lustre/orion/lrn036/world-shared/data/superres/prism/2.5_arcmin",
 #    'DAYMET_1': "/lustre/orion/lrn036/world-shared/data/superres/daymet/2.5_arcmin",
 #    'DAYMET_2': "/lustre/orion/lrn036/world-shared/data/superres/daymet/0.5_arcmin",
 # old datasets
@@ -224,8 +231,4 @@ data:
   }
 
 
-### Tiling
-tiling:
-  do_tiling: True
-  div: 4
-  overlap: 2
+
