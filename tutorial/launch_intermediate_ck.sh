@@ -35,6 +35,7 @@ conda activate /lustre/orion/proj-shared/ven114/ashwinaji/miniconda3/envs/sc25
 ## DDStore and GPTL Timer
 
 module use -a /lustre/orion/world-shared/lrn036/jyc/frontier/sw/modulefiles
+module load SR_tools
 module load libfabric/1.22.0p
 
 export MASTER_ADDR=$(hostname -i)
@@ -73,7 +74,7 @@ ${OMNISTAT_WRAPPER} usermode --start --interval 1 | tee omnistat_start.log
 for FA in "CK" "SDPA" "default"; do
   export FA_ALGO=${FA}; srun -n $((SLURM_JOB_NUM_NODES*8)) \
   python ./tutorial/intermediate_downscaling.py ./configs/interm_8m.yaml \
-  > logs/${SLURM_JOB_ID}/orbit-${SLURM_JOB_ID}-${FA}.out 2> logs/${SLURM_JOB_ID}/orbit-${SLURM_JOB_ID}-${FA}.er
+  > logs/${SLURM_JOB_ID}/orbit-${SLURM_JOB_ID}-${FA}.out 2> logs/${SLURM_JOB_ID}/orbit-${SLURM_JOB_ID}-${FA}.err
 done
 
 # (3) Tear-down data collection and summarize results
