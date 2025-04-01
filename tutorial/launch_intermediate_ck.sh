@@ -62,10 +62,22 @@ export LD_PRELOAD=/lib64/libgcc_s.so.1:/usr/lib64/libstdc++.so.6
 
 mkdir -p logs/${SLURM_JOB_ID}
 
+# (1a) Setup omnistat sampling environment
+ml use /autofs/nccs-svm1_sw/crusher/amdsw/modules
+ml omnistat-wrapper
+export OMNISTAT_VICTORIA_DATADIR=/lustre/orion/${SLURM_JOB_ACCOUNT}/world-shared/omnistat/${SLURM_JOB_ID}
+# (1b) Enable data collectors and polling (1 sec interval)
+${OMNISTAT_WRAPPER} usermode --start --interval 1 | tee omnistat_start.log
+
+# (2) Run the job
 for FA in "CK" "SDPA" "default"; do
   export FA_ALGO=${FA}; srun -n $((SLURM_JOB_NUM_NODES*8)) \
   python ./tutorial/intermediate_downscaling.py ./configs/interm_8m.yaml \
   > logs/${SLURM_JOB_ID}/orbit-${SLURM_JOB_ID}-${FA}.out 2> logs/${SLURM_JOB_ID}/orbit-${SLURM_JOB_ID}-${FA}.er
 done
 
+# (3) Tear-down data collection and summarize results
+${OMNISTAT_WRAPPER} usermode --stopexporters
+${OMNISTAT_WRAPPER} query --job ${SLURM_JOB_ID} --interval 1 --pdf omnistat-${SLURM_JOB_ID}.pdf > omnistat-${SLURM_JOB_ID}.txt
+${OMNISTAT_WRAPPER} usermode --stopserver
 
