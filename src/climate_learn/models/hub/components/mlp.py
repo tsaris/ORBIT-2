@@ -14,6 +14,8 @@ import torch.distributed as dist
 
 from climate_learn.utils.dist_functions import F_AllReduce_B_Identity as F_AllReduce_B_Identity
 from climate_learn.utils.dist_functions import F_Identity_B_AllReduce as F_Identity_B_AllReduce
+from climate_learn.utils.dist_functions import Grad_Inspect
+
 
 
 
@@ -53,7 +55,10 @@ class Mlp(nn.Module):
         self.drop2 = nn.Dropout(drop_probs[1])
 
     def forward(self, x):
-        x= F_Identity_B_AllReduce(x, group=self.tensor_par_group)
+
+        if self.tensor_par_size >1:
+
+            x= F_Identity_B_AllReduce(x, group=self.tensor_par_group)
 
         x = self.fc1(x)
         x = self.act(x)
@@ -62,7 +67,8 @@ class Mlp(nn.Module):
         x = self.fc2(x)
         x = self.drop2(x)
 
-        x = F_AllReduce_B_Identity (x, op=dist.ReduceOp.SUM, group=self.tensor_par_group)
+        if self.tensor_par_size >1:
+            x = F_AllReduce_B_Identity (x, op=dist.ReduceOp.SUM, group=self.tensor_par_group)
 
         return x
 

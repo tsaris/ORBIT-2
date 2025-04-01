@@ -415,7 +415,11 @@ class _F_Identity_B_Identity(Function):
     def backward(ctx, grad_output):
 
         if ctx.rank==0 or ctx.rank==1:
-            print("rank",ctx.rank,"grad_output[0,0,0]",grad_output[0,0,0],flush=True)
+            if grad_output.ndim==4:
+                print("rank",ctx.rank,"grad_output[0,0,400,500]",grad_output[0,0,400,500],flush=True)
+            else:
+                print("rank",ctx.rank,"grad_output[0,0,0]",grad_output[0,0,0],"grad_output[0,0,1]",grad_output[0,0,1],flush=True)
+
         return (grad_output)
 
 

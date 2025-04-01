@@ -5,21 +5,28 @@ trainer:
   pretrain:
   batch_size: 32
   buffer_size: 400
-  num_workers: 1
+  num_workers: 2
   data_type: bfloat16
-  train_loss: "mse"
+  train_loss: "bayesian_tv"
 
 #----------  Parallelism -------------
 parallelism:
-  fsdp: 1
-  simple_ddp: 8
-  tensor_par: 2
+  fsdp: 4
+  simple_ddp: 4
+  tensor_par: 1
   seq_par: 1
+
+
+### Tiling
+tiling:
+  do_tiling: False
+  div: 4
+  overlap: 3
   
 # ---------------------------- MODEL -------------------------------------------
 model:
   preset: res_slimvit
-  lr: 1e-3
+  lr: 2e-3
   weight_decay: 1e-5
   beta_1: 0.9
   beta_2: 0.99
@@ -28,7 +35,7 @@ model:
   eta_min: 1e-8
   superres_mag: 4
   cnn_ratio: 4
-  patch_size: 4
+  patch_size: 2
   embed_dim: 256
   depth: 6
   decoder_depth: 4
@@ -222,3 +229,6 @@ data:
     "2m_temperature_min": 10,
     "2m_temperature_max": 10,
   }
+
+
+

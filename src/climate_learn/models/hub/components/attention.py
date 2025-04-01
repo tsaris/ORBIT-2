@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Type
-from climate_learn.utils.dist_functions import F_Identity_B_AllReduce, F_Identity_B_AllReduce_VariableMapping
+from climate_learn.utils.dist_functions import F_Identity_B_AllReduce, F_Identity_B_AllReduce_VariableMapping, Grad_Inspect
 import torch.distributed as dist
 
 import os
@@ -46,7 +46,10 @@ class Attention(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, N, C = x.shape
-        x= F_Identity_B_AllReduce(x, group=self.tensor_par_group)
+
+        if self.tensor_par_size>1:
+             
+            x= F_Identity_B_AllReduce(x, group=self.tensor_par_group)
 
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads // self.tensor_par_size, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
@@ -99,7 +102,8 @@ class Attention(nn.Module):
         x = self.proj(x)
         x = self.proj_drop(x)
 
-        dist.all_reduce(x, op=dist.ReduceOp.SUM, group=self.tensor_par_group)
+        if self.tensor_par_size >1:
+            dist.all_reduce(x, op=dist.ReduceOp.SUM, group=self.tensor_par_group)
 
         return x
 
@@ -154,6 +158,7 @@ class VariableMapping_Attention(nn.Module):
     def forward(self, var_query: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
 
         if self.tensor_par_size >1:
+
             var_query= F_Identity_B_AllReduce_VariableMapping(var_query, group=self.tensor_par_group)
             x= F_Identity_B_AllReduce_VariableMapping(x, group=self.tensor_par_group)
 

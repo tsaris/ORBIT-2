@@ -1,10 +1,10 @@
 #-----------   TRAINER -------------
 trainer:
   max_epochs: 100
-  checkpoint: 
-  pretrain: 
-  batch_size: 8 
-  buffer_size: 100
+  checkpoint: "./checkpoints/climate/interm_epoch_22.ckpt"
+  pretrain:  
+  batch_size: 32
+  buffer_size: 200
   num_workers: 2
   data_type: bfloat16
   train_loss: "bayesian_tv"
@@ -12,14 +12,14 @@ trainer:
 
 #----------  Parallelism -------------
 parallelism:
-  fsdp: 4
+  fsdp: 8
   simple_ddp: 4
-  tensor_par: 1
+  tensor_par: 4
   seq_par: 1
  
 ### Tiling
 tiling:
-  do_tiling: False
+  do_tiling: True
   div: 4
   overlap: 3
  
@@ -36,7 +36,7 @@ model:
   superres_mag: 4
   cnn_ratio: 4
   patch_size: 2
-  embed_dim: 1024
+  embed_dim: 3072
   depth: 8
   decoder_depth: 4
   num_heads: 16

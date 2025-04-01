@@ -28,6 +28,8 @@ class NpyReader(IterableDataset):
         data_par_size: int =1,
         data_par_group = None,
         shuffle=False,
+        div=1,
+        overlap=4,
     ):
         super().__init__()
         assert len(inp_file_list) == len(out_file_list)
@@ -38,7 +40,8 @@ class NpyReader(IterableDataset):
         self.shuffle = shuffle
         self.data_par_size = data_par_size
         self.data_par_group = data_par_group
-
+        self.div = div
+        self.overlap = overlap
 
     def __iter__(self):
         if self.shuffle:
@@ -84,7 +87,96 @@ class NpyReader(IterableDataset):
             iter_start = worker_id * per_worker
             iter_end = iter_start + per_worker
 
+        div_size = self.div ** 2
 
+        for idx in range(iter_start, iter_end):
+            path_inp = self.inp_file_list[idx]
+            path_out = self.out_file_list[idx]
+            print(torch.distributed.get_rank(), "NpyReader:", path_inp)
+
+            inp_data = np.load(path_inp)
+            if path_out == path_inp:
+                out_data = inp_data
+            else:
+                out_data = np.load(path_out)
+
+            k0 = self.variables[0]
+            k1 = self.out_variables[0]
+            xinp = len( inp_data[k0][0,0,0,:] )
+            yinp = len( inp_data[k0][0,0,:,0] )
+            xout = len( out_data[k1][0,0,0,:] )
+            yout = len( out_data[k1][0,0,:,0] )
+            hmul = xout // xinp
+            vmul = yout // yinp
+
+            if self.overlap % 2 == 0:
+                left = right = self.overlap // 2 * 2
+                top = bottom = self.overlap // 2
+            else:
+                left = self.overlap // 2 * 2
+                right = ( self.overlap // 2 + 1 ) * 2
+                top = self.overlap // 2
+                bottom = self.overlap // 2 + 1
+            #hoverlap = self.overlap * 2
+            #voverlap = self.overlap
+
+            for vindex in range(self.div):
+                for hindex in range(self.div):
+
+                    if self.div == 1:
+                        xi1 = 0
+                        xi2 = xinp
+                        xo1 = 0
+                        xo2 = xout
+                    else:
+                        xi1 = xinp // self.div * hindex
+                        xi2 = xinp // self.div * (hindex+1)
+                        xo1 = xout // self.div * hindex
+                        xo2 = xout // self.div * (hindex+1)
+                        if hindex == 0:
+                            xi2 += left
+                            xo2 += left * hmul
+                        else:
+                            xi1 -= left
+                            xo1 -= left * hmul
+                        if hindex == self.div - 1:
+                            xi1 -= right
+                            xo1 -= right * hmul
+                        else:
+                            xi2 += right
+                            xo2 += right * hmul
+
+                    if self.div == 1:
+                        yi1 = 0
+                        yi2 = yinp
+                        yo1 = 0
+                        yo2 = yout
+                    else:
+                        yi1 = yinp // self.div * vindex
+                        yi2 = yinp // self.div * (vindex+1)
+                        yo1 = yout // self.div * vindex
+                        yo2 = yout // self.div * (vindex+1)
+                        if vindex == 0:
+                            yi2 += top
+                            yo2 += top * vmul
+                        else:
+                            yi1 -= top
+                            yo1 -= top * vmul
+                        if vindex == self.div - 1:
+                            yi1 -= bottom
+                            yo1 -= bottom * vmul
+                        else:
+                            yi2 += bottom
+                            yo2 += bottom * vmul
+
+                    yield (
+                        {k: np.squeeze(inp_data[k][:,:,yi1:yi2,xi1:xi2], axis=1) for k in self.variables},
+                        {k: np.squeeze(out_data[k][:,:,yo1:yo2,xo1:xo2], axis=1) for k in self.out_variables},
+                        self.variables,
+                        self.out_variables
+                    )
+
+        """
         for idx in range(iter_start, iter_end):
             path_inp = self.inp_file_list[idx]
             path_out = self.out_file_list[idx]
@@ -97,7 +189,7 @@ class NpyReader(IterableDataset):
             yield {k: np.squeeze(inp[k], axis=1) for k in self.variables}, {
                 k: np.squeeze(out[k], axis=1) for k in self.out_variables
             }, self.variables, self.out_variables
-
+        """
 
 class DirectForecast(IterableDataset):
     def __init__(self, dataset, src, pred_range=6, history=3, window=6):
