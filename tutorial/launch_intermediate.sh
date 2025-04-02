@@ -34,6 +34,7 @@ conda activate /lustre/orion/lrn036/world-shared/xf9/torch26
 ## DDStore and GPTL Timer
 
 module use -a /lustre/orion/world-shared/lrn036/jyc/frontier/sw/modulefiles
+module load SR_tools
 module load libfabric/1.22.0p
 
 
