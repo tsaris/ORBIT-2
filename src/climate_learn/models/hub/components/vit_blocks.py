@@ -27,6 +27,7 @@ class Block(nn.Module):
             dim: int,
             num_heads: int,
             fused_attn: bool =False,
+            use_ck: bool = False,
             mlp_ratio: float = 4.,
             qkv_bias: bool = False,
             qk_norm: bool = False,
@@ -46,6 +47,7 @@ class Block(nn.Module):
         self.attn = Attention(
             dim,
             fused_attn=fused_attn,
+            use_ck=use_ck,
             num_heads=num_heads,
             qkv_bias=qkv_bias,
             qk_norm=qk_norm,
