@@ -291,6 +291,8 @@ class Res_Slim_ViT(nn.Module):
         # x.shape = [B,num_patches,embed_dim]
         x = self.norm(x)
 
+        if self.tensor_par_size>1:
+            x= F_Identity_B_Broadcast(x, src_rank, group=self.tensor_par_group)
 
         return x
 
