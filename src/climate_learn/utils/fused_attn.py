@@ -7,8 +7,6 @@ Classes:
         - DEFAULT: Represents the "DEFAULT" mode using PyTorch/Triton.
         - NONE: Represents no fused attention.
 
-
-    ```
 """
 
 class FusedAttn(Enum):
