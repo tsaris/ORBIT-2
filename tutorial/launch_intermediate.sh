@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH -A LRN036
 #SBATCH -J flash
-#SBATCH --nodes=64
+#SBATCH --nodes=32
 #SBATCH --gres=gpu:8
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
-#SBATCH -t 02:00:00
+#SBATCH -t 01:00:00
 #SBATCH -q debug
 #SBATCH -o flash-%j.out
 #SBATCH -e flash-%j.error
@@ -34,7 +34,6 @@ conda activate /lustre/orion/lrn036/world-shared/xf9/torch26
 ## DDStore and GPTL Timer
 
 module use -a /lustre/orion/world-shared/lrn036/jyc/frontier/sw/modulefiles
-module load SR_tools
 module load libfabric/1.22.0p
 
 
@@ -60,8 +59,12 @@ export LD_PRELOAD=/lib64/libgcc_s.so.1:/usr/lib64/libstdc++.so.6
 #python ./intermediate_downscaling.py ../configs/interm_8m.yaml
 
 
+#time srun -n $((SLURM_JOB_NUM_NODES*8)) \
+#python ./intermediate_downscaling.py ../configs/interm_1b.yaml
+
 time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-python ./intermediate_downscaling.py ../configs/interm_1b.yaml
+python ./intermediate_downscaling.py ../configs/interm_10b.yaml
+
 
 
 
