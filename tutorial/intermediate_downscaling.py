@@ -707,7 +707,7 @@ def main(device):
     
                     epoch_loss += loss.detach()
         
-                    if world_rank==0 or world_rank==1:
+                    if world_rank < tensor_par_size:
                         print("epoch: ",epoch,"batch_idx",batch_idx,"world_rank",world_rank," loss ",loss,flush=True)
         
                     optimizer.zero_grad()
