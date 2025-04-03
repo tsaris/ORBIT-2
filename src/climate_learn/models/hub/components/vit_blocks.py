@@ -4,6 +4,7 @@ from .attention import Attention
 from timm.layers import DropPath
 from .mlp import Mlp
 from typing import Type, Optional
+from climate_learn.utils.fused_attn import FusedAttn
 
 class LayerScale(nn.Module):
     def __init__(
@@ -26,7 +27,7 @@ class Block(nn.Module):
             self,
             dim: int,
             num_heads: int,
-            fused_attn: bool =False,
+            fused_attn: FusedAttn = FusedAttn.NONE,
             mlp_ratio: float = 4.,
             qkv_bias: bool = False,
             qk_norm: bool = False,
