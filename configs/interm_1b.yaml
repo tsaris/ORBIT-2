@@ -39,7 +39,7 @@ model:
   embed_dim: 3072
   depth: 8
   decoder_depth: 4
-  num_heads: 16
+  num_heads: 24
   mlp_ratio: 4
   drop_path: 0.1
   drop_rate: 0.1
