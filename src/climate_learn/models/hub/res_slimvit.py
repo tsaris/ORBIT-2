@@ -39,6 +39,7 @@ class Res_Slim_ViT(nn.Module):
         mlp_ratio=4.0,
         tensor_par_size = 1,
         tensor_par_group = None,
+        FusedAttn_option = FusedAttn.CK,
     ):
         super().__init__()
         self.default_vars = default_vars
@@ -74,7 +75,7 @@ class Res_Slim_ViT(nn.Module):
         self.var_query = nn.Parameter(torch.zeros(1, 1, embed_dim), requires_grad=True)
 
         #self.var_agg = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
-        self.var_agg = VariableMapping_Attention(embed_dim, fused_attn=FusedAttn.CK, num_heads=num_heads, qkv_bias=False,tensor_par_size = tensor_par_size, tensor_par_group = tensor_par_group)
+        self.var_agg = VariableMapping_Attention(embed_dim, fused_attn=FusedAttn_option, num_heads=num_heads, qkv_bias=False,tensor_par_size = tensor_par_size, tensor_par_group = tensor_par_group)
         
         self.pos_embed = nn.Parameter(
             torch.zeros(1, self.num_patches, embed_dim), requires_grad=learn_pos_emb
@@ -87,7 +88,7 @@ class Res_Slim_ViT(nn.Module):
                 Block(
                     embed_dim,
                     num_heads =num_heads, 
-                    fused_attn=FusedAttn.CK,
+                    fused_attn=FusedAttn_option,
                     mlp_ratio = mlp_ratio,
                     qkv_bias=True,
                     drop_path=dpr[i],

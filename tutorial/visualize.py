@@ -29,6 +29,8 @@ from climate_learn.data.processing.era5_constants import (
 from climate_learn.models.hub.components.vit_blocks import Block
 from torch.nn import Sequential
 from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed
+from climate_learn.utils.fused_attn import FusedAttn
+
 
 
 
@@ -267,7 +269,7 @@ fsdp_size = world_size //tensor_par_size
 simple_ddp_size = 1
 seq_par_size = 1
 
-
+FusedAttn_option = FusedAttn.DEFAULT 
 
 low_res_dir = conf['data']['low_res_dir']
 high_res_dir = conf['data']['high_res_dir']
@@ -300,7 +302,7 @@ data_par_size = fsdp_size * simple_ddp_size
 
 if world_rank==0:
     print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir,"preset",preset,"dict_out_variables",dict_out_variables,"lr",lr,"beta_1",beta_1,"beta_2",beta_2,"weight_decay",weight_decay,"warmup_epochs",warmup_epochs,"warmup_start_lr",warmup_start_lr,"eta_min",eta_min,"superres_mag",superres_mag,"cnn_ratio",cnn_ratio,"patch_size",patch_size,"embed_dim",embed_dim,"depth",depth,"decoder_depth",decoder_depth,"num_heads",num_heads,"mlp_ratio",mlp_ratio,"drop_path",drop_path,"drop_rate",drop_rate,"batch_size",batch_size,"num_workers",num_workers,"buffer_size",buffer_size,flush=True)
-    print("data_par_size",data_par_size,"fsdp_size",fsdp_size,"simple_ddp_size",simple_ddp_size,"tensor_par_size",tensor_par_size,"seq_par_size",seq_par_size,flush=True)
+    print("data_par_size",data_par_size,"fsdp_size",fsdp_size,"simple_ddp_size",simple_ddp_size,"tensor_par_size",tensor_par_size,"seq_par_size",seq_par_size,"FusedAttn_option",FusedAttn_option, flush=True)
 
 
 #initialize parallelism groups
@@ -308,7 +310,7 @@ _, data_par_group, tensor_par_group, _, fsdp_group, _ = init_par_groups(data_par
 
 
 
-model_kwargs = {'default_vars':default_vars,'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate, 'tensor_par_size':tensor_par_size, 'tensor_par_group':tensor_par_group}
+model_kwargs = {'default_vars':default_vars,'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate, 'tensor_par_size':tensor_par_size, 'tensor_par_group':tensor_par_group,'FusedAttn_option':FusedAttn_option}
 
 
 if world_rank==0:
@@ -322,7 +324,7 @@ if preset!="vit" and preset!="res_slimvit":
 
 
 # Set up data
-data_key = "PRISM"
+data_key = "ERA5_1"
 
 in_vars = dict_in_variables[data_key]
 out_vars = dict_out_variables[data_key]
@@ -390,7 +392,7 @@ denorm = test_transforms[0]
 
 print("denorm is ",denorm,flush=True)
 
-pretrain_path = "./checkpoints/climate/interm_epoch_5.ckpt"
+pretrain_path = "./checkpoints/climate/interm_epoch_6.ckpt"
 
 # load from pretrained model weights
 load_checkpoint_pretrain(model, pretrain_path,tensor_par_size=tensor_par_size,tensor_par_group=tensor_par_group)

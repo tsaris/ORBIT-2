@@ -25,6 +25,8 @@ from ..metrics import MetricsMetaInfo, METRICS_REGISTRY
 import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import _LRScheduler as LRScheduler
+from climate_learn.utils.fused_attn import FusedAttn
+
 
 def load_model_module(
     device,
@@ -254,7 +256,7 @@ load_downscaling_module = partial(
 )
 
 
-def load_architecture(task, data_module, architecture, default_vars, superres_mag=4,cnn_ratio=4, patch_size=2,embed_dim=256,depth=6,decoder_depth=1,num_heads=4,mlp_ratio=4,drop_path=0.1,drop_rate=0.1, tensor_par_size = 1, tensor_par_group = None):
+def load_architecture(task, data_module, architecture, default_vars, superres_mag=4,cnn_ratio=4, patch_size=2,embed_dim=256,depth=6,decoder_depth=1,num_heads=4,mlp_ratio=4,drop_path=0.1,drop_rate=0.1, tensor_par_size = 1, tensor_par_group = None,FusedAttn_option = FusedAttn.CK ):
     in_vars, out_vars = get_data_variables(data_module)
     in_shape, out_shape = get_data_dims(data_module)
 
@@ -367,6 +369,7 @@ def load_architecture(task, data_module, architecture, default_vars, superres_ma
                     drop_rate=drop_rate,
                     tensor_par_size = tensor_par_size,
                     tensor_par_group = tensor_par_group,
+                    FusedAttn_option = FusedAttn_option, 
                 )
 
 
