@@ -11,6 +11,7 @@ from ..data.processing.cmip6_constants import VAR_TO_UNIT as CMIP6_VAR_TO_UNIT
 from climate_learn.data.processing.era5_constants import (
     CONSTANTS
 )
+from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 
 
 def min_max_normalize(data):
@@ -345,7 +346,10 @@ def visualize_at_index(mm, dm, dm_vis, out_list, in_transform, out_transform,var
 #    psnr = calculate_psnr(hr_array, sr_array, np.max( [ hr_array.max(), sr_array.max() ] ) )
 #    ssim = calculate_ssim(hr_array, sr_array, np.max( [ hr_array.max(), sr_array.max() ] ) )
 
-#    print( f"Goodness of fit: PSNR {psnr} , SSIM {ssim}" )
+    psnr = peak_signal_noise_ratio(hr_array, sr_array, data_range=hr_array.max() - hr_array.min))
+    ssim = structural_similarity(hr_array, sr_array, data_range=hr_array.max() - hr_array.min())
+
+    print( f"Goodness of fit: PSNR {psnr} , SSIM {ssim}" )
 
 
     # None, if no history
