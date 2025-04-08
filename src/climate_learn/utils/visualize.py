@@ -352,9 +352,8 @@ def visualize_at_index(mm, dm, dm_vis, out_list, in_transform, out_transform,var
 
     psnr = peak_signal_noise_ratio(hr_array, sr_array, data_range=hr_array.max() - hr_array.min())
     ssim = structural_similarity(hr_array, sr_array, data_range=hr_array.max() - hr_array.min())
-    rmse = np.sqrt(np.mean((preds- groundtruths)**2))
 
-    print( f"Goodness of fit: PSNR {psnr} , SSIM {ssim}, RMSE {rmse}" )
+    print( f"Goodness of fit: PSNR {psnr} , SSIM {ssim}" )
 
 
     # None, if no history
