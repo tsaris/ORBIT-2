@@ -485,6 +485,10 @@ def main(device):
 
     cp_save_path = "checkpoints/climate" 
 
+    if data_type == "bfloat16":
+        scaler = ShardedGradScaler()
+        if world_rank==0:
+            print("initialize ShardedGradScaler for bfloat16",flush=True)
 
     while (epoch_start+interval_epochs) < max_epochs:
 
@@ -712,11 +716,23 @@ def main(device):
         
                     optimizer.zero_grad()
                     #timer.begin("backward")
-                    loss.backward()
-                    #timer.end("backward")
-                    #timer.begin("optimizer_step")
-                    optimizer.step()
-                    #timer.end("optimizer_step")
+
+                    if data_type == "float32":
+                        loss.backward()
+                        #timer.end("backward")
+                        #timer.begin("optimizer_step")
+                        optimizer.step()
+                        #timer.end("optimizer_step")
+                    else:
+                        # Scales loss.  Calls backward() on scaled loss to create scaled gradients.
+                        scaler.scale(loss).backward()
+                        # scaler.step() first unscales gradients of the optimizer's params.
+                        # If gradients don't contain infs/NaNs, optimizer.step() is then called,
+                        # otherwise, optimizer.step() is skipped.
+                        scaler.step(optimizer)
+                        # Updates the scale for next iteration.
+                        scaler.update()
+
    
                     
                     if world_rank==0:
