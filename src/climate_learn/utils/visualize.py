@@ -46,9 +46,18 @@ def visualize_at_index(mm, dm, dm_vis, out_list, in_transform, out_transform,var
 
     yout = len( lat )
     xout = len( lon )
-    yinp = yout // 4
-    xinp = xout // 4
 
+    if torch.distributed.get_rank()==0:
+        print("dm.inp_root_dir",dm.inp_root_dir,flush=True)
+ 
+    if dm.inp_root_dir == dm.out_root_dir:
+        yout = yout * mm.superres_mag
+        xout = xout * mm.superres_mag
+
+    yinp = yout // mm.superres_mag
+    xinp = xout // mm.superres_mag
+
+ 
     asets = div ** 2
 
     #hoverlap = overlap * 2
@@ -76,12 +85,15 @@ def visualize_at_index(mm, dm, dm_vis, out_list, in_transform, out_transform,var
         variable_with_units = f"{variable}"
 
     else:
-        raise NotImplementedError(f"{src} is not a supported source")
+        variable_with_units = f"{variable}"
+
+
 
     counter = 0
     adj_index = None
 
-    groundtruths = np.zeros((yout, xout),dtype=np.float32)
+    if dm.inp_root_dir != dm.out_root_dir:
+        groundtruths = np.zeros((yout, xout),dtype=np.float32)
     preds = np.zeros((yout, xout),dtype=np.float32)
     inputs = np.zeros((yinp, xinp),dtype=np.float32)
     hmul = xout // xinp
@@ -295,14 +307,15 @@ def visualize_at_index(mm, dm, dm_vis, out_list, in_transform, out_transform,var
             if yy.shape[0] != ppred.shape[0] or yy.shape[1] != ppred.shape[1]:
                 yy = yy[0 : ppred.shape[0], 0 : ppred.shape[1]]
 
-            groundtruths[yo1r:yo2r, xo1r:xo2r] = yy[yo1t:yo2t, xo1t:xo2t]
+            if dm.inp_root_dir != dm.out_root_dir:
+                groundtruths[yo1r:yo2r, xo1r:xo2r] = yy[yo1t:yo2t, xo1t:xo2t]
 
     ###
     img_min = np.min(inputs)
     img_max = np.max(inputs)
 
 
-    plt.figure(figsize=(inputs.shape[1]/10,inputs.shape[0]/10))
+    plt.figure(figsize=(inputs.shape[1]/100,inputs.shape[0]/100))
     plt.imshow(inputs,cmap='coolwarm',vmin=img_min,vmax=img_max)
     anim = None
     plt.show()
@@ -316,7 +329,7 @@ def visualize_at_index(mm, dm, dm_vis, out_list, in_transform, out_transform,var
     ppred_max = np.max(preds)
 
 
-    plt.figure(figsize=(preds.shape[1]/10,preds.shape[0]/10))
+    plt.figure(figsize=(preds.shape[1]/100,preds.shape[0]/100))
     plt.imshow(preds,cmap='coolwarm',vmin=img_min,vmax=img_max)
     plt.show()
     plt.savefig('prediction.png')
@@ -326,16 +339,17 @@ def visualize_at_index(mm, dm, dm_vis, out_list, in_transform, out_transform,var
 
     # print("ground truth yy.shape",yy.shape,"extent",extent,flush=True)
 
+    if dm.inp_root_dir != dm.out_root_dir:
+        if groundtruths.shape[0]!=preds.shape[0] or groundtruths.shape[1]!=preds.shape[1]:
+            groundtruths= groundtruths[0:preds.shape[0],0:preds.shape[1]]
 
-    if groundtruths.shape[0]!=preds.shape[0] or groundtruths.shape[1]!=preds.shape[1]:
-        groundtruths= groundtruths[0:preds.shape[0],0:preds.shape[1]]
 
-    plt.figure(figsize=(groundtruths.shape[1]/10,groundtruths.shape[0]/10))
-    plt.imshow(groundtruths,cmap='coolwarm',vmin=img_min,vmax=img_max)
-    plt.show()
-    plt.savefig('groundtruth.png')
+        plt.figure(figsize=(groundtruths.shape[1]/100,groundtruths.shape[0]/100))
+        plt.imshow(groundtruths,cmap='coolwarm',vmin=img_min,vmax=img_max)
+        plt.show()
+        plt.savefig('groundtruth.png')
+        np.save('truth.npy', groundtruths )
 
-    np.save('truth.npy', groundtruths )
     np.save('preds.npy', preds )
 
 
@@ -346,14 +360,15 @@ def visualize_at_index(mm, dm, dm_vis, out_list, in_transform, out_transform,var
 
     
 
+    if dm.inp_root_dir != dm.out_root_dir:
+ 
+    #    psnr = calculate_psnr(hr_array, sr_array, np.max( [ hr_array.max(), sr_array.max() ] ) )
+    #    ssim = calculate_ssim(hr_array, sr_array, np.max( [ hr_array.max(), sr_array.max() ] ) )
 
-#    psnr = calculate_psnr(hr_array, sr_array, np.max( [ hr_array.max(), sr_array.max() ] ) )
-#    ssim = calculate_ssim(hr_array, sr_array, np.max( [ hr_array.max(), sr_array.max() ] ) )
+        psnr = peak_signal_noise_ratio(hr_array, sr_array, data_range=hr_array.max() - hr_array.min())
+        ssim = structural_similarity(hr_array, sr_array, data_range=hr_array.max() - hr_array.min())
 
-    psnr = peak_signal_noise_ratio(hr_array, sr_array, data_range=hr_array.max() - hr_array.min())
-    ssim = structural_similarity(hr_array, sr_array, data_range=hr_array.max() - hr_array.min())
-
-    print( f"Goodness of fit: PSNR {psnr} , SSIM {ssim}" )
+        print( f"Goodness of fit: PSNR {psnr} , SSIM {ssim}" )
 
 
     # None, if no history
