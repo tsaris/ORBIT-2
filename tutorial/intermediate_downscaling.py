@@ -486,7 +486,8 @@ def main(device):
     cp_save_path = "checkpoints/climate" 
 
     if data_type == "bfloat16":
-        scaler = ShardedGradScaler()
+        scaler = ShardedGradScaler(init_scale=8192, growth_interval=100)
+        min_scale= 128
         if world_rank==0:
             print("initialize ShardedGradScaler for bfloat16",flush=True)
 
@@ -732,6 +733,8 @@ def main(device):
                         scaler.step(optimizer)
                         # Updates the scale for next iteration.
                         scaler.update()
+                        if scaler._scale <min_scale:
+                            scaler._scale = torch.tensor(min_scale).to(scaler._scale)
 
    
                     
