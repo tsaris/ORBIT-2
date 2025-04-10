@@ -353,15 +353,14 @@ def visualize_at_index(mm, dm, dm_vis, out_list, in_transform, out_transform,var
     np.save('preds.npy', preds )
 
 
-    # evaluation metric
-    sr_array = preds
-    hr_array = groundtruths
-
-
     
 
     if dm.inp_root_dir != dm.out_root_dir:
+
  
+         # evaluation metric
+         sr_array = preds
+         hr_array = groundtruths
     #    psnr = calculate_psnr(hr_array, sr_array, np.max( [ hr_array.max(), sr_array.max() ] ) )
     #    ssim = calculate_ssim(hr_array, sr_array, np.max( [ hr_array.max(), sr_array.max() ] ) )
 
