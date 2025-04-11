@@ -37,6 +37,7 @@ from climate_learn.models.hub.components.cnn_blocks import (
     UpBlock,
     ResidualBlock
 )
+from climate_learn.utils.fused_attn import FusedAttn
 from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed
 from climate_learn.dist.profile import *
 
@@ -458,7 +459,7 @@ def main(device):
 
 
 
-    model_kwargs = {'default_vars':default_vars,'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate, 'tensor_par_size':tensor_par_size, 'tensor_par_group':tensor_par_group}
+    model_kwargs = {'default_vars':default_vars,'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate, 'tensor_par_size':tensor_par_size, 'tensor_par_group':tensor_par_group,"FusedAttn_option":FusedAttn_option}
 
 
     if world_rank==0:
@@ -487,9 +488,12 @@ def main(device):
 
     if data_type == "bfloat16":
         scaler = ShardedGradScaler(init_scale=8192, growth_interval=100)
+        FusedAttn_option = FusedAttn.CK
         min_scale= 128
         if world_rank==0:
             print("initialize ShardedGradScaler for bfloat16",flush=True)
+    else:
+        FusedAttn_option = FusedAttn.DEFAULT
 
     while (epoch_start+interval_epochs) < max_epochs:
 
