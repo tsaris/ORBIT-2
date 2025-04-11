@@ -458,6 +458,10 @@ def main(device):
     seq_par_group, data_par_group, tensor_par_group, data_seq_ort_group, fsdp_group, simple_ddp_group = init_par_groups(data_par_size = data_par_size, tensor_par_size = tensor_par_size, seq_par_size = seq_par_size, fsdp_size = fsdp_size, simple_ddp_size = simple_ddp_size, num_heads= num_heads)
 
 
+    if data_type == "bfloat16":
+        FusedAttn_option = FusedAttn.CK
+    else:
+       FusedAttn_option = FusedAttn.DEFAULT
 
     model_kwargs = {'default_vars':default_vars,'superres_mag':superres_mag,'cnn_ratio':cnn_ratio,'patch_size':patch_size,'embed_dim':embed_dim,'depth':depth,'decoder_depth':decoder_depth,'num_heads':num_heads,'mlp_ratio':mlp_ratio,'drop_path':drop_path,'drop_rate':drop_rate, 'tensor_par_size':tensor_par_size, 'tensor_par_group':tensor_par_group,"FusedAttn_option":FusedAttn_option}
 
@@ -487,13 +491,10 @@ def main(device):
     cp_save_path = "checkpoints/climate" 
 
     if data_type == "bfloat16":
-        scaler = ShardedGradScaler(init_scale=8192, growth_interval=100)
-        FusedAttn_option = FusedAttn.CK
+        scaler = shardedgradscaler(init_scale=8192, growth_interval=100)
         min_scale= 128
         if world_rank==0:
-            print("initialize ShardedGradScaler for bfloat16",flush=True)
-    else:
-        FusedAttn_option = FusedAttn.DEFAULT
+            print("initialize shardedgradscaler for bfloat16",flush=true)
 
     while (epoch_start+interval_epochs) < max_epochs:
 
