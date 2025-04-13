@@ -302,7 +302,7 @@ data_par_size = fsdp_size * simple_ddp_size
 
 if world_rank==0:
     print("max_epochs",max_epochs," ",checkpoint_path," ",pretrain_path," ",low_res_dir," ",high_res_dir,"preset",preset,"dict_out_variables",dict_out_variables,"lr",lr,"beta_1",beta_1,"beta_2",beta_2,"weight_decay",weight_decay,"warmup_epochs",warmup_epochs,"warmup_start_lr",warmup_start_lr,"eta_min",eta_min,"superres_mag",superres_mag,"cnn_ratio",cnn_ratio,"patch_size",patch_size,"embed_dim",embed_dim,"depth",depth,"decoder_depth",decoder_depth,"num_heads",num_heads,"mlp_ratio",mlp_ratio,"drop_path",drop_path,"drop_rate",drop_rate,"batch_size",batch_size,"num_workers",num_workers,"buffer_size",buffer_size,flush=True)
-    print("data_par_size",data_par_size,"fsdp_size",fsdp_size,"simple_ddp_size",simple_ddp_size,"tensor_par_size",tensor_par_size,"seq_par_size",seq_par_size,"FusedAttn_option",FusedAttn_option, flush=True)
+    print("data_par_size",data_par_size,"fsdp_size",fsdp_size,"simple_ddp_size",simple_ddp_size,"tensor_par_size",tensor_par_size,"seq_par_size",seq_par_size,"FusedAttn_option",FusedAttn_option, "div",div,"overlap",overlap, flush=True)
 
 
 #initialize parallelism groups
@@ -324,7 +324,7 @@ if preset!="vit" and preset!="res_slimvit":
 
 
 # Set up data
-data_key = "ERA5_1"
+data_key = "INFER"
 
 in_vars = dict_in_variables[data_key]
 out_vars = dict_out_variables[data_key]
@@ -357,6 +357,8 @@ data_module = cl.data.IterDataModule(
 data_module.setup()
 
 
+
+
 dm_vis = cl.data.IterDataModule(
     "downscaling",
     low_res_dir[data_key],
@@ -384,6 +386,31 @@ if dist.get_rank()==0:
  
 model = model.to(device)
 
+
+
+
+if do_tiling:
+    lat, lon = data_module.get_lat_lon()
+
+    yout = len( lat )
+    xout = len( lon )
+
+    if data_module.inp_root_dir == data_module.out_root_dir:
+        yout = yout * model.superres_mag
+        xout = xout * model.superres_mag
+
+
+    yinp = yout // mm.superres_mag + overlap
+    if yinp % patch_size != 0:
+        if world_rank == 0:
+            print(f"Tile height: {yinp}, patch_size {patch_size}")
+            print("Overlap must be adjusted to accomodate patch_size of the Transformer. Need to increase the overlap by ", ( yinp % patch_size ))                        sys.exit("Please increase the overlap accordingly to the instructions in the print message")
+
+
+
+
+
+
 #denorm = model.test_target_transforms[0]
 
 
@@ -392,7 +419,7 @@ denorm = test_transforms[0]
 
 print("denorm is ",denorm,flush=True)
 
-pretrain_path = "./checkpoints/climate/interm_epoch_6.ckpt"
+pretrain_path = "./checkpoints/climate/interm_epoch_7.ckpt"
 
 # load from pretrained model weights
 load_checkpoint_pretrain(model, pretrain_path,tensor_par_size=tensor_par_size,tensor_par_group=tensor_par_group)
@@ -464,7 +491,7 @@ cl.utils.visualize.visualize_at_index(
     out_list=out_vars,
     in_transform=denorm,
     out_transform=denorm,
-    variable="2m_temperature_max",
+    variable="total_precipitation_24hr",
     src=data_key,
     device = device,
     div=div,
