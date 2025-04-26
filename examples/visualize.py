@@ -324,7 +324,7 @@ if preset!="vit" and preset!="res_slimvit":
 
 
 # Set up data
-data_key = "INFER"
+data_key = "ERA5_2"
 
 in_vars = dict_in_variables[data_key]
 out_vars = dict_out_variables[data_key]
@@ -387,30 +387,6 @@ if dist.get_rank()==0:
 model = model.to(device)
 
 
-
-
-if do_tiling:
-    lat, lon = data_module.get_lat_lon()
-
-    yout = len( lat )
-    xout = len( lon )
-
-    if data_module.inp_root_dir == data_module.out_root_dir:
-        yout = yout * model.superres_mag
-        xout = xout * model.superres_mag
-
-
-    yinp = yout // mm.superres_mag + overlap
-    if yinp % patch_size != 0:
-        if world_rank == 0:
-            print(f"Tile height: {yinp}, patch_size {patch_size}")
-            print("Overlap must be adjusted to accomodate patch_size of the Transformer. Need to increase the overlap by ", ( yinp % patch_size ))                        sys.exit("Please increase the overlap accordingly to the instructions in the print message")
-
-
-
-
-
-
 #denorm = model.test_target_transforms[0]
 
 
@@ -419,7 +395,7 @@ denorm = test_transforms[0]
 
 print("denorm is ",denorm,flush=True)
 
-pretrain_path = "./checkpoints/climate/interm_epoch_7.ckpt"
+pretrain_path = "/lustre/orion/lrn036/world-shared/xf9/downscale_checkpoint/intermediate_117m.ckpt"
 
 # load from pretrained model weights
 load_checkpoint_pretrain(model, pretrain_path,tensor_par_size=tensor_par_size,tensor_par_group=tensor_par_group)
