@@ -1,14 +1,13 @@
 #!/bin/bash
 #SBATCH -A LRN036
-#SBATCH -J flash
-#SBATCH --nodes=32
+#SBATCH -J orbit-2
+#SBATCH --nodes=1 #32
 #SBATCH --gres=gpu:8
 #SBATCH --ntasks-per-node=8
 #SBATCH --cpus-per-task=7
-#SBATCH -t 02:00:00
-#SBATCH -p batch
-#SBATCH -o flash-%j.out
-#SBATCH -e flash-%j.error
+#SBATCH -t 00:10:00
+#SBATCH -q debug
+#SBATCH -o logs/orbit-2-%j.out
 
 [ -z $JOBID ] && JOBID=$SLURM_JOB_ID
 [ -z $JOBSIZE ] && JOBSIZE=$SLURM_JOB_NUM_NODES
@@ -17,8 +16,7 @@
 #ulimit -n 65536
 
 
-
-source ~/miniconda3/etc/profile.d/conda.sh
+#source ~/miniconda3/etc/profile.d/conda.sh
 
 module load PrgEnv-gnu
 module load rocm/6.2.4
@@ -53,18 +51,6 @@ export ORBIT_USE_DDSTORE=0 ## 1 (enabled) or 0 (disable)
 export LD_PRELOAD=/lib64/libgcc_s.so.1:/usr/lib64/libstdc++.so.6
 
 time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-python ./intermediate_downscaling.py ../configs/interm_117m.yaml
-
-#time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-#python ./intermediate_downscaling.py ../configs/interm_8m.yaml
-
-
-#time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-#python ./intermediate_downscaling.py ../configs/interm_1b.yaml
-
-#time srun -n $((SLURM_JOB_NUM_NODES*8)) \
-#python ./intermediate_downscaling.py ../configs/interm_10b.yaml
-
-
+     python ./intermediate_downscaling.py ./configs/interm_8m.yaml
 
 

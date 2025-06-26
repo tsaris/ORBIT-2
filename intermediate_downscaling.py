@@ -5,7 +5,6 @@ import torch
 import functools
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp.wrap import wrap, transformer_auto_wrap_policy
-from torch.cuda.amp.grad_scaler import GradScaler
 import torch.distributed as dist
 from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
    checkpoint_wrapper,
@@ -491,10 +490,10 @@ def main(device):
     cp_save_path = "checkpoints/climate" 
 
     if data_type == "bfloat16":
-        scaler = shardedgradscaler(init_scale=8192, growth_interval=100)
+        scaler = ShardedGradScaler(init_scale=8192, growth_interval=100)
         min_scale= 128
         if world_rank==0:
-            print("initialize shardedgradscaler for bfloat16",flush=true)
+            print("initialize ShardedGradScaler for bfloat16",flush=True)
 
     while (epoch_start+interval_epochs) < max_epochs:
 
