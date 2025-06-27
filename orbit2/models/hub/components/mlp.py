@@ -12,9 +12,9 @@ from timm.layers.helpers import to_2tuple
 import torch.distributed as dist
 
 
-from climate_learn.utils.dist_functions import F_AllReduce_B_Identity as F_AllReduce_B_Identity
-from climate_learn.utils.dist_functions import F_Identity_B_AllReduce as F_Identity_B_AllReduce
-from climate_learn.utils.dist_functions import Grad_Inspect
+from orbit2.utils.dist_functions import F_AllReduce_B_Identity as F_AllReduce_B_Identity
+from orbit2.utils.dist_functions import F_Identity_B_AllReduce as F_Identity_B_AllReduce
+from orbit2.utils.dist_functions import Grad_Inspect
 
 
 

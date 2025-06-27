@@ -23,22 +23,22 @@ import numpy as np
 import yaml
 
 # Third party
-import climate_learn as cl
-from climate_learn.data.processing.era5_constants import (
+import orbit2 as cl
+from orbit2.data.processing.era5_constants import (
     PRESSURE_LEVEL_VARS,
     DEFAULT_PRESSURE_LEVELS,
     CONSTANTS
 )
-from climate_learn.models.hub.components.vit_blocks import Block
-from climate_learn.models.hub.components.cnn_blocks import (
+from orbit2.models.hub.components.vit_blocks import Block
+from orbit2.models.hub.components.cnn_blocks import (
     DownBlock,
     MiddleBlock,
     UpBlock,
     ResidualBlock
 )
-from climate_learn.utils.fused_attn import FusedAttn
-from climate_learn.models.hub.components.pos_embed import interpolate_pos_embed
-from climate_learn.dist.profile import *
+from orbit2.utils.fused_attn import FusedAttn
+from orbit2.models.hub.components.pos_embed import interpolate_pos_embed
+from orbit2.dist.profile import *
 
 
 def load_checkpoint_pretrain(model, checkpoint_path, pretrain_path, cp_save_path, tensor_par_size=1,tensor_par_group=None):

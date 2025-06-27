@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Type
-from climate_learn.utils.dist_functions import F_Identity_B_AllReduce, F_Identity_B_AllReduce_VariableMapping, Grad_Inspect
-from climate_learn.utils.fused_attn import FusedAttn
+from orbit2.utils.dist_functions import F_Identity_B_AllReduce, F_Identity_B_AllReduce_VariableMapping, Grad_Inspect
+from orbit2.utils.fused_attn import FusedAttn
 import torch.distributed as dist
 
 import xformers

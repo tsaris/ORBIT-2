@@ -8,7 +8,7 @@ from scipy.stats import rankdata
 from tqdm import tqdm
 from ..data.processing.era5_constants import VAR_TO_UNIT as ERA5_VAR_TO_UNIT
 from ..data.processing.cmip6_constants import VAR_TO_UNIT as CMIP6_VAR_TO_UNIT
-from climate_learn.data.processing.era5_constants import (
+from orbit2.data.processing.era5_constants import (
     CONSTANTS
 )
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity

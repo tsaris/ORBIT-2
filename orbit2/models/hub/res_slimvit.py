@@ -13,8 +13,8 @@ from einops import rearrange
 from .components.pos_embed import interpolate_pos_embed_on_the_fly
 from .components.patch_embed import PatchEmbed 
 from .components.vit_blocks import Block
-from climate_learn.utils.dist_functions import F_Identity_B_Broadcast, Grad_Inspect
-from climate_learn.utils.fused_attn import FusedAttn
+from orbit2.utils.dist_functions import F_Identity_B_Broadcast, Grad_Inspect
+from orbit2.utils.fused_attn import FusedAttn
 
 
 @register("res_slimvit")

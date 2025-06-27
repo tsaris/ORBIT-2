@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader
 
-from climate_learn.data.climatebench_dataset import (
+from orbit2.data.climatebench_dataset import (
     ClimateBenchDataset,
     input_for_training,
     load_x_y,

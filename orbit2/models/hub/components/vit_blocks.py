@@ -4,7 +4,7 @@ from .attention import Attention
 from timm.layers import DropPath
 from .mlp import Mlp
 from typing import Type, Optional
-from climate_learn.utils.fused_attn import FusedAttn
+from orbit2.utils.fused_attn import FusedAttn
 
 class LayerScale(nn.Module):
     def __init__(

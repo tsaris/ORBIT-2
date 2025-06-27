@@ -25,7 +25,7 @@ from ..metrics import MetricsMetaInfo, METRICS_REGISTRY
 import torch
 import torch.nn as nn
 from torch.optim.lr_scheduler import _LRScheduler as LRScheduler
-from climate_learn.utils.fused_attn import FusedAttn
+from orbit2.utils.fused_attn import FusedAttn
 
 
 def load_model_module(
