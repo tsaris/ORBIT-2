@@ -1,5 +1,8 @@
 # ORBIT-2: A Foundation Model for the Earth System
 
+<p align="left">
+  <img src="docs/imgs/orbit2.png" width="640px">
+</p>
 
 This repository contains code accompanying the paper [**ORBIT-2: Scaling Exascale Vision Foundation Models for Weather and Climate Downscaling**](https://arxiv.org/abs/2301.10343).
 
